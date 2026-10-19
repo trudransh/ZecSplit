@@ -1,0 +1,37 @@
+# Build pack, strategy, research and hackathon notes: never commit
+private/
+
+# Local AI tooling: kept out of history (DECISIONS.md ADR-015)
+CLAUDE.md
+.claude/
+.claude-flow/
+
+# Secrets and local state
+.env
+.env.*
+*.key
+*.pem
+*.age
+*.sqlite
+*.sqlite-journal
+*.db
+swap-recovery-*.json
+devnet/data/
+**/wallet-data/
+
+# Rust
+target/
+**/*.rs.bk
+
+# Node / web
+node_modules/
+dist/
+.vite/
+.next/
+coverage/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
