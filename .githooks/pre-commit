@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# What .gitignore can't stop: forced adds of private or AI-tooling files.
+# AGENTS.md NEVER-1; DECISIONS.md ADR-014, ADR-015.
+set -euo pipefail
+
+if git diff --cached --name-only | grep -qE '^(private/|CLAUDE\.md$|\.claude/|\.claude-flow/)'; then
+    echo "pre-commit: private/, CLAUDE.md and .claude*/ must never be committed." >&2
+    exit 1
+fi

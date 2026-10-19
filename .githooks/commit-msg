@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# One change per commit with a conventional header, and no AI or co-author attribution.
+# AGENTS.md ALWAYS-3 and NEVER-10; DECISIONS.md ADR-015, ADR-016.
+set -euo pipefail
+
+body=$(grep -v '^#' "$1" || true)
+header=$(printf '%s\n' "$body" | head -n1)
+
+case $header in
+    Merge\ * | Revert\ * | fixup!\ * | squash!\ * | amend!\ *) exit 0 ;;
+esac
+
+types='feat|fix|refactor|test|docs|chore|perf|build|ci|style|revert'
+if ! printf '%s' "$header" | grep -qE "^($types)(\([a-z0-9-]+\))?!?: [^ ].*$" || [ ${#header} -gt 72 ]; then
+    echo "commit-msg: header must be '<type>(<scope>): <subject>', at most 72 chars." >&2
+    echo "  types: ${types//|/ }" >&2
+    echo "  got:   $header" >&2
+    exit 1
+fi
+
+if printf '%s\n' "$body" | grep -qiE '^co-authored-by:|generated (with|by) |noreply@anthropic\.com'; then
+    echo "commit-msg: remove Co-Authored-By / 'Generated with' lines. Commits carry the human author only." >&2
+    exit 1
+fi
