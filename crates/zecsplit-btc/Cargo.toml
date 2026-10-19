@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 zecsplit-crypto = { path = "../zecsplit-crypto" }
+bitcoin = "=0.32.11"

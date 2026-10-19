@@ -22,6 +22,11 @@ confidence-threshold = 0.9
 unused-allowed-license = "allow"
 private = { ignore = true }
 
+
+[[licenses.exceptions]]
+crate = "hex_lit"
+allow = ["MITNFA"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"

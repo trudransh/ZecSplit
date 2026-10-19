@@ -3,6 +3,7 @@
 
 # Local AI tooling: kept out of history (DECISIONS.md ADR-015)
 CLAUDE.md
+AGENTS.md
 .claude/
 .claude-flow/
 
