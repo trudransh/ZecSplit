@@ -1,0 +1,15 @@
+[package]
+name = "zecsplit-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zecsplit-crypto = { path = "../zecsplit-crypto" }
+zecsplit-zcash = { path = "../zecsplit-zcash" }
+zecsplit-btc = { path = "../zecsplit-btc" }
