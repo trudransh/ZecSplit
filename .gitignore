@@ -1,5 +1,5 @@
-# Build pack, strategy, research and hackathon notes: never commit
-private/
+# Build pack, strategy, research and hackathon notes, and any archive of them: never commit
+/private*
 
 # Local AI tooling: kept out of history (DECISIONS.md ADR-015)
 CLAUDE.md
@@ -35,3 +35,6 @@ coverage/
 .idea/
 .vscode/
 *.swp
+
+# Knowledge graph output (lives in private/graphify-out)
+/graphify-out
