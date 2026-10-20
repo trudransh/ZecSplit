@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Usage: mine-btc N. Mines N regtest blocks to the devnet wallet.
+set -euo pipefail
+
+cli="$(dirname "$0")/btc-cli"
+"$cli" generatetoaddress "${1:?usage: mine-btc N}" "$("$cli" getnewaddress | tr -d '\r')" >/dev/null
+echo "bitcoind height: $("$cli" getblockcount)"

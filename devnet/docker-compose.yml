@@ -1,0 +1,34 @@
+# Local regtest stack: `just devnet-up` / `just devnet-down`.
+# Ports bind to 127.0.0.1 only; none of these endpoints have real auth.
+
+services:
+  zebra:
+    image: zfnd/zebra:7.0.0-rc.0
+    volumes:
+      - ./zebrad.toml:/home/zebra/.config/zebrad.toml:ro
+    ports:
+      - "127.0.0.1:18232:18232" # JSON-RPC
+      - "127.0.0.1:9067:9067"   # light-client gRPC (CompactTxStreamer)
+
+  # Shares Zebra's network namespace so the wallet reaches the light server on
+  # localhost, where zcash-devtool skips TLS. Wallet state dies with the container,
+  # like Zebra's ephemeral chain.
+  zec-wallet:
+    build: ./zec-wallet
+    network_mode: "service:zebra"
+    command: ["sleep", "infinity"]
+    init: true
+
+  bitcoind:
+    image: bitcoin/bitcoin:31.1
+    command:
+      - -regtest
+      - -server
+      - -txindex
+      - -fallbackfee=0.0001
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=0.0.0.0/0
+      - -rpcuser=devnet
+      - -rpcpassword=devnet
+    ports:
+      - "127.0.0.1:18443:18443"
