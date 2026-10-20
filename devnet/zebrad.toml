@@ -1,0 +1,27 @@
+# Zebra regtest for the devnet. Every upgrade through NU7 is active from block 1,
+# so the lock note lands in the Ironwood pool (NU6.3) exactly as on testnet.
+
+[network]
+network = "Regtest"
+
+[network.testnet_parameters.activation_heights]
+NU5 = 1
+NU6 = 1
+"NU6.1" = 1
+"NU6.2" = 1
+"NU6.3" = 1
+NU7 = 1
+
+[mining]
+# Regtest transparent address from the Zebra book; `generate` pays coinbase here.
+miner_address = "t27eWDgjFYJGVXmzrXeVjnb5J3uXDM9xH9v"
+
+[state]
+# Fresh chain on every `devnet-up`.
+ephemeral = true
+
+[rpc]
+listen_addr = "0.0.0.0:18232"
+# Plaintext and unauthenticated: compose only publishes these on 127.0.0.1.
+enable_cookie_auth = false
+lightwalletd_listen_addr = "0.0.0.0:9067"
