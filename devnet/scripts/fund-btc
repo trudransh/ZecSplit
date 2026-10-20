@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Usage: fund-btc <addr> <btc>. Pays <btc> from the devnet wallet and confirms it with one block.
+set -euo pipefail
+
+dir="$(dirname "$0")"
+txid="$("$dir/btc-cli" sendtoaddress "${1:?usage: fund-btc <addr> <btc>}" "${2:?usage: fund-btc <addr> <btc>}" | tr -d '\r')"
+"$dir/mine-btc" 1 >/dev/null
+echo "$txid"
