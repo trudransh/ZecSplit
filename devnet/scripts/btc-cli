@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Usage: btc-cli <bitcoin-cli args>. bitcoin-cli against the devnet bitcoind, "devnet" wallet.
+set -euo pipefail
+
+compose=(docker compose -f "$(dirname "$0")/../docker-compose.yml")
+cli=("${compose[@]}" exec -T bitcoind bitcoin-cli -regtest -rpcuser=devnet -rpcpassword=devnet -rpcwait)
+
+"${cli[@]}" -rpcwallet=devnet getwalletinfo >/dev/null 2>&1 ||
+    "${cli[@]}" createwallet devnet >/dev/null 2>&1 ||
+    "${cli[@]}" loadwallet devnet >/dev/null
+
+"${cli[@]}" -rpcwallet=devnet "$@"
