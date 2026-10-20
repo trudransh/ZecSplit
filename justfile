@@ -1,5 +1,5 @@
-# Targets follow private/docs/architecture/ARCHITECTURE.md §7. devnet-up, e2e, adv,
-# priv, demo and status arrive with the tickets that build them.
+# Targets follow private/docs/architecture/ARCHITECTURE.md §7. e2e, adv, priv, demo
+# and status arrive with the tickets that build them.
 
 # Once per clone: turn on the commit hooks.
 setup:
@@ -12,3 +12,14 @@ check:
     cargo test --workspace --locked
     cargo deny check
     scripts/secret-scan.sh
+
+# Start the regtest stack (fresh chains), then fund both wallets.
+# 101 BTC blocks so the bitcoind wallet has a mature coinbase.
+devnet-up:
+    docker compose -f devnet/docker-compose.yml up -d
+    devnet/scripts/mine-zec 1
+    devnet/scripts/mine-btc 101
+    devnet/scripts/zec-wallet setup
+
+devnet-down:
+    docker compose -f devnet/docker-compose.yml down
