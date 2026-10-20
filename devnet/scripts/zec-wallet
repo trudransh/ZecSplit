@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Usage:
+#   zec-wallet setup              new regtest wallet, funded with one shielded coinbase
+#   zec-wallet address            the wallet's Orchard-only UA
+#   zec-wallet balance            spendable balances as JSON (zatoshis)
+#   zec-wallet send <ua> <zats>   pay <zats> to <ua>, then mine 1 block to confirm it
+set -euo pipefail
+# Git Bash on Windows would rewrite the container paths below into C:/Program Files/Git/...
+export MSYS_NO_PATHCONV=1
+
+dir="$(dirname "$0")"
+wallet=(docker compose -f "$dir/../docker-compose.yml" exec -T zec-wallet
+    zcash-devtool wallet -w /wallet)
+server=(-s 127.0.0.1:9067)
+
+zec_rpc() {
+    local out
+    out="$(curl -sS --fail -H 'content-type: application/json' \
+        --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":$2}" http://127.0.0.1:18232)"
+    # Zebra reports RPC errors inside an HTTP 200.
+    [[ "$out" == *'"result"'* ]] || { echo "zec-wallet: $1: $out" >&2; exit 1; }
+}
+
+address() {
+    local ua
+    ua="$("${wallet[@]}" list-addresses --receiver orchard | sed -n 's/^Receiver(orchard): //p' | tr -d '\r')"
+    [[ -n "$ua" ]] || { echo "zec-wallet: no Orchard address found" >&2; exit 1; }
+    echo "$ua"
+}
+
+case "${1:-}" in
+setup)
+    # Zebra's light server rejects height 0 (it reads as "no height"), and the wallet
+    # fetches the tree state at birthday - 1, so pin the birthday at 2.
+    "$dir/mine-zec" 2 >/dev/null
+    "${wallet[@]}" init --name devnet --birthday 2 -i /wallet/identity.txt -n regtest \
+        --activation-heights /activation-heights.toml "${server[@]}" >/dev/null
+    # The coinbase pays the Orchard receiver, so it lands as an Ironwood note (NU6.3+).
+    zec_rpc generatetoaddress "[1, \"$(address)\"]" >/dev/null
+    # Coinbase outputs are spendable only after 100 confirmations.
+    "$dir/mine-zec" 100 >/dev/null
+    "${wallet[@]}" sync "${server[@]}" >/dev/null
+    "${wallet[@]}" balance --json
+    ;;
+address)
+    address
+    ;;
+balance)
+    "${wallet[@]}" sync "${server[@]}" >/dev/null
+    "${wallet[@]}" balance --json
+    ;;
+send)
+    "${wallet[@]}" sync "${server[@]}" >/dev/null
+    "${wallet[@]}" send -i /wallet/identity.txt --address "${2:?usage: zec-wallet send <ua> <zats>}" \
+        --value "${3:?usage: zec-wallet send <ua> <zats>}" "${server[@]}" | tail -n 1
+    "$dir/mine-zec" 1 >/dev/null
+    ;;
+*)
+    sed -n '2,6p' "$0" >&2
+    exit 2
+    ;;
+esac
