@@ -30,11 +30,13 @@ address() {
 
 case "${1:-}" in
 setup)
+    # init reads an optional value from stdin; `exec -T` forwards ours, so close it or
+    # setup waits forever on an invisible prompt.
     # Zebra's light server rejects height 0 (it reads as "no height"), and the wallet
     # fetches the tree state at birthday - 1, so pin the birthday at 2.
     "$dir/mine-zec" 2 >/dev/null
     "${wallet[@]}" init --name devnet --birthday 2 -i /wallet/identity.txt -n regtest \
-        --activation-heights /activation-heights.toml "${server[@]}" >/dev/null
+        --activation-heights /activation-heights.toml "${server[@]}" </dev/null >/dev/null
     # The coinbase pays the Orchard receiver, so it lands as an Ironwood note (NU6.3+).
     zec_rpc generatetoaddress "[1, \"$(address)\"]" >/dev/null
     # Coinbase outputs are spendable only after 100 confirmations.
