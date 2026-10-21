@@ -64,6 +64,19 @@ pub enum SweepStatus {
     NothingToSweep,
 }
 
+/// The ZEC lock as Bob's own Zebra node sees it (§4.3-R1/R2, ADR-009). The shell sums the
+/// unspent Ironwood notes at the lock address and compares the total with the quote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZecLock {
+    Unseen,
+    /// Short or over (§5.5): Bob never sends `esig_B` for it.
+    WrongAmount,
+    /// Exactly the quoted amount, every note unspent; `confirmations` of the shallowest note.
+    Correct {
+        confirmations: u32,
+    },
+}
+
 /// One snapshot of everything on chain that matters to a swap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainView {
@@ -74,6 +87,8 @@ pub struct ChainView {
     pub refund: TxStatus,
     pub punish: TxStatus,
     pub zec_sweep: SweepStatus,
+    /// Bob only; Alice's engine leaves it `Unseen`.
+    pub zec_lock: ZecLock,
 }
 
 /// Terminal results (§6.1, §6.2).
@@ -102,4 +117,22 @@ pub enum Alert {
     BtcSourcesDisagree,
     MarginTooSmall,
     PeerMisbehavedAfterLock,
+}
+
+#[cfg(test)]
+impl ChainView {
+    pub(crate) fn with_lock(mut self, s: TxStatus) -> Self {
+        self.lock = s;
+        self
+    }
+
+    pub(crate) fn with_redeem(mut self, s: TxStatus) -> Self {
+        self.redeem = s;
+        self
+    }
+
+    pub(crate) fn with_zec(mut self, z: ZecLock) -> Self {
+        self.zec_lock = z;
+        self
+    }
 }
