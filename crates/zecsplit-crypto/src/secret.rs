@@ -26,7 +26,7 @@ macro_rules! secret_type {
 }
 
 secret_type!(
-    /// A party's key share `s_x` (PROTOCOL_SPEC §1): 32 bytes little-endian, below 2^252,
+    /// A party's key share `s_x` (PROTOCOL_SPEC §1, ADR-028): 32 bytes little-endian, below 2^254,
     /// valid as a scalar on both Pallas and secp256k1.
     ///
     /// It can't be formatted, displayed or cloned:

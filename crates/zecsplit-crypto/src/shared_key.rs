@@ -39,7 +39,7 @@ pub enum KeyError {
     InvalidPoint,
     #[error("S_a + S_b is the identity, so the shares cancel out")]
     IdentitySum,
-    #[error("share is not an integer in [1, 2^252)")]
+    #[error("share is not an integer in [1, 2^254)")]
     InvalidShare,
 }
 
@@ -88,8 +88,9 @@ fn pallas_point(bytes: &[u8; 32]) -> Result<pallas::Point, KeyError> {
 
 fn share_scalar(share: &Share) -> Result<Zeroizing<pallas::Scalar>, KeyError> {
     let bytes = share.expose_secret();
-    // §1: a share is an integer in [1, 2^252), so its top four bits are clear.
-    if bytes[31] & 0xf0 != 0 || bytes == &[0; 32] {
+    // §1 (ADR-028): a share is an integer in [1, 2^254), the cross-group DLEq's range, so
+    // its top two bits are clear. 2^254 is below both group orders.
+    if bytes[31] & 0xc0 != 0 || bytes == &[0; 32] {
         return Err(KeyError::InvalidShare);
     }
     Option::from(pallas::Scalar::from_repr(*bytes))
@@ -109,13 +110,13 @@ mod tests {
         reddsa::VerificationKey::from(&sk).into()
     }
 
-    /// A deterministic share in [1, 2^252) and its public Pallas share. The secp half is
+    /// A deterministic share in [1, 2^254) and its public Pallas share. The secp half is
     /// left zero: nothing in §3.3 reads it.
     fn share(seed: u8) -> (Share, SharePub) {
         let mut s: [u8; 32] = h512(b"test_share\0\0\0\0\0\0", &[seed])[..32]
             .try_into()
             .unwrap();
-        s[31] &= 0x0f;
+        s[31] &= 0x3f;
         let public = SharePub {
             pallas: spend_auth_point(&s),
             secp: [0; 33],
@@ -185,7 +186,7 @@ mod tests {
     fn spec_1_rejects_shares_outside_range() {
         let (good, _) = share(1);
         let mut too_big = *good.expose_secret();
-        too_big[31] |= 0x10;
+        too_big[31] |= 0x40;
         let big = Share::from_bytes(too_big);
         assert_eq!(
             shared_ask(&big, &good, Sigma::Plus).err(),
@@ -218,8 +219,8 @@ mod tests {
             mut sa in any::<[u8; 32]>(),
             mut sb in any::<[u8; 32]>(),
         ) {
-            sa[31] &= 0x0f;
-            sb[31] &= 0x0f;
+            sa[31] &= 0x3f;
+            sb[31] &= 0x3f;
             prop_assume!(sa != [0; 32] && sb != [0; 32]);
             let a = SharePub { pallas: spend_auth_point(&sa), secp: [0; 33] };
             let b = SharePub { pallas: spend_auth_point(&sb), secp: [0; 33] };
