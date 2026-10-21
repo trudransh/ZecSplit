@@ -141,6 +141,7 @@ pub fn verify(
 mod tests {
     use std::sync::LazyLock;
 
+    use pasta_curves::group::GroupEncoding as _;
     use reddsa::orchard::SpendAuth;
     use reddsa::{SigningKey, VerificationKey};
 
@@ -200,6 +201,36 @@ mod tests {
 
         // Below dleq's mutual capacity of 2^254 (§1, ADR-028).
         assert!(secret.pallas()[31] < 0x40);
+    }
+
+    /// `S^P` leaves the vendored pasta 0.5 as bytes; pasta 0.6.1 (orchard, §3.3) must read
+    /// back the same point.
+    #[test]
+    fn spec_3_2_r2_pallas_point_decodes_with_pasta_0_6() {
+        let (_, p, _, _) = &*A;
+        let point: Option<pasta_curves::pallas::Point> =
+            pasta_curves::pallas::Point::from_bytes(p).into();
+        assert_eq!(point.map(|q| q.to_bytes()), Some(*p));
+    }
+
+    /// `S^S` is the adaptor point on Bitcoin, so rust-secp256k1 (the `bitcoin` crate's
+    /// backend) must parse it and agree that it is `[s]·G`.
+    #[test]
+    fn spec_3_2_r2_secp_point_matches_rust_secp256k1() {
+        let (secret, _, s, _) = &*A;
+        let mut be = *secret.pallas();
+        be.reverse();
+        let sk = secp256k1::SecretKey::from_slice(&be).unwrap();
+        let expected = secp256k1::PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &sk);
+        assert_eq!(secp256k1::PublicKey::from_slice(s), Ok(expected));
+    }
+
+    #[test]
+    fn spec_1_share_is_in_1_to_2_pow_254() {
+        for (secret, _, _, _) in [&*A, &*B] {
+            let s = secret.pallas();
+            assert!(s[31] & 0xc0 == 0 && *s != [0; 32]);
+        }
     }
 
     /// T-015 meets T-010: two real DLEq shares combine into a valid lock key (§3.3-R1).
