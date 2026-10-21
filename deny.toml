@@ -27,6 +27,16 @@ private = { ignore = true }
 crate = "hex_lit"
 allow = ["MITNFA"]
 
+# Zlib (permissive) via the Zcash wallet stack: rusqlite -> hashbrown -> foldhash,
+# and zcash_client_backend -> flume -> nanorand.
+[[licenses.exceptions]]
+crate = "foldhash"
+allow = ["Zlib"]
+
+[[licenses.exceptions]]
+crate = "nanorand"
+allow = ["Zlib"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
