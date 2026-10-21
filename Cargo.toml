@@ -27,10 +27,11 @@ zeroize = { version = "=1.9.1", features = ["derive"] }
 
 # Cross-group DLEq (§3.2-R2, ADR-005), plan B: dleq stays on group 0.13, so it gets its Pallas
 # from a vendored pasta_curves 0.5.1 with the zeroize feature backported. vendor/dleq/REVIEW.md.
+# `pasta_curves_dleq` is for dleq.rs only; everything else uses `pasta_curves` 0.6.1.
 dleq = { path = "vendor/dleq", features = ["experimental", "serialize"] }
 flexible-transcript = { version = "=0.3.4", features = ["recommended"] }
 k256 = { version = "=0.13.4", default-features = false, features = ["arithmetic", "bits", "hash2curve"] }
-pasta_curves_05 = { package = "pasta_curves", path = "vendor/pasta_curves", features = ["alloc", "zeroize"] }
+pasta_curves_dleq = { package = "pasta_curves", path = "vendor/pasta_curves", features = ["alloc", "zeroize"] }
 rand_core = { version = "=0.6.4", features = ["getrandom"] }
 sha2 = "=0.10.9"
 
