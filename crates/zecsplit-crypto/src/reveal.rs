@@ -1,10 +1,4 @@
 //! Commit-reveal with proofs of knowledge (PROTOCOL_SPEC §3.1, §3.2).
-//!
-//! Committing before revealing stops a party from choosing its share as a function of the
-//! other's (rogue key, THREAT_MODEL T1). The DLEq ties each Pallas share to its secp256k1
-//! twin (T2). The three proofs of knowledge show the revealer knows the discrete log of
-//! every key it reveals, closing the gap in the original proof (ADR-005). Every hash and
-//! signed message is bound to `swap_id` and the role (T13).
 
 use pasta_curves::group::{Group, GroupEncoding};
 use pasta_curves::pallas;
@@ -16,7 +10,7 @@ use crate::dleq;
 use crate::hash::{HK_COMMIT_V1, HK_POK_V1, h256};
 use crate::{BtcSecret, Share, SharePub};
 
-/// The party a message or proof belongs to. Alice is the taker, Bob the maker (§1).
+/// The party a message or proof belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Alice,
@@ -37,25 +31,20 @@ impl Role {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Commitment(pub [u8; 32]);
 
-/// Everything a party reveals (§3.2-R1). All public.
+/// Everything a party reveals (§3.2-R1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reveal {
     pub share_pub: SharePub,
-    /// `K_x`, the party's Bitcoin 2-of-2 key (SEC1 compressed).
     pub btc_key: [u8; 33],
     pub nonce: [u8; 32],
     pub dleq: Vec<u8>,
-    /// RedPallas SpendAuth signature under `S^P`.
     pub pok_p: [u8; 64],
-    /// BIP340 signature under `S^S`.
     pub pok_s: [u8; 64],
-    /// ECDSA signature under `K` (compact encoding).
     pub pok_k: [u8; 64],
-    /// Alice's redeem/punish address, or Bob's refund address.
     pub payout_addr: String,
 }
 
-/// One party's secrets for one swap. No `Debug`, `Clone` or `Serialize` (NEVER-2).
+/// One party's secrets for one swap.
 pub struct KeyMaterial {
     pub share: Share,
     pub btc_secret: BtcSecret,
@@ -139,7 +128,7 @@ impl KeyMaterial {
         commit(swap_id, role, &self.share_pub, &self.btc_key, &self.nonce)
     }
 
-    /// §3.2-R1. Call only once both commitments are known (§3.1-R2).
+    /// §3.2-R1.
     pub fn reveal(
         &self,
         swap_id: &[u8; 32],
@@ -153,12 +142,9 @@ impl KeyMaterial {
 
         let pallas_key = reddsa::SigningKey::<SpendAuth>::from_bytes(self.share.expose_secret())
             .map_err(|_| RevealError::Generate("share is not a Pallas scalar"))?;
-        // ponytail: `UnwrapErr` panics if the OS RNG fails, which reddsa's infallible `Rng`
-        // bound forces. Fine on any OS where getrandom works at all.
         let rng = getrandom::rand_core::UnwrapErr(getrandom::SysRng);
         let pok_p: [u8; 64] = pallas_key.sign(rng, &m).into();
 
-        // The same integer as a secp256k1 scalar: Share is little-endian, secp big-endian.
         let mut be = *self.share.expose_secret();
         be.reverse();
         let share_keypair = Keypair::from_secret_key(
@@ -191,9 +177,7 @@ impl KeyMaterial {
     }
 }
 
-/// §3.2-R3: every check a party runs on the other's reveal. `role` is the revealer's;
-/// `own` is the verifier's own public share (for R3.7). Any error aborts the swap, with no
-/// retry under the same `swap_id`.
+/// §3.2-R3: every check a party runs on the other's reveal.
 pub fn verify_reveal(
     swap_id: &[u8; 32],
     role: Role,
@@ -203,7 +187,6 @@ pub fn verify_reveal(
     c_b: &Commitment,
     own: &SharePub,
 ) -> Result<(), RevealError> {
-    // R3.1
     let expected = commit(
         swap_id,
         role,
@@ -215,17 +198,14 @@ pub fn verify_reveal(
         return Err(RevealError::Commitment);
     }
 
-    // R3.6 first, so the signature checks below never run on degenerate keys.
     let pallas_point =
         Option::<pallas::Point>::from(pallas::Point::from_bytes(&reveal.share_pub.pallas))
             .filter(|p| !bool::from(p.is_identity()))
             .ok_or(RevealError::InvalidPoint)?;
-    // SEC1 compressed encodings can't express the point at infinity.
     let share_secp =
         PublicKey::from_slice(&reveal.share_pub.secp).map_err(|_| RevealError::InvalidPoint)?;
     let btc_key = PublicKey::from_slice(&reveal.btc_key).map_err(|_| RevealError::InvalidPoint)?;
 
-    // R3.2
     dleq::verify(
         swap_id,
         role.byte(),
@@ -238,25 +218,21 @@ pub fn verify_reveal(
     let m = pok_message(swap_id, role, c_a, c_b);
     let secp = Secp256k1::verification_only();
 
-    // R3.3
     let vk = reddsa::VerificationKey::<SpendAuth>::try_from(pallas_point.to_bytes())
         .map_err(|_| RevealError::PokPallas)?;
     vk.verify(&m, &reddsa::Signature::from(reveal.pok_p))
         .map_err(|_| RevealError::PokPallas)?;
 
-    // R3.4
     let (x_only, _) = share_secp.x_only_public_key();
     let sig_s = schnorr::Signature::from_slice(&reveal.pok_s).map_err(|_| RevealError::PokSecp)?;
     secp.verify_schnorr(&sig_s, &Message::from_digest(m), &x_only)
         .map_err(|_| RevealError::PokSecp)?;
 
-    // R3.5
     let sig_k =
         ecdsa::Signature::from_compact(&reveal.pok_k).map_err(|_| RevealError::PokBtcKey)?;
     secp.verify_ecdsa(&Message::from_digest(m), &sig_k, &btc_key)
         .map_err(|_| RevealError::PokBtcKey)?;
 
-    // R3.7
     if reveal.share_pub.pallas == own.pallas || reveal.share_pub.secp == own.secp {
         return Err(RevealError::SameShare);
     }
@@ -271,7 +247,6 @@ pub fn check_share_matches(share: &Share, public: &SharePub) -> bool {
 }
 
 fn random_secret_key<R: RngCore>(rng: &mut R) -> Result<SecretKey, RevealError> {
-    // A uniform 32-byte string is a valid key except with probability about 2^-128.
     for _ in 0..8 {
         let mut bytes = [0; 32];
         rng.fill_bytes(&mut bytes);
@@ -299,7 +274,7 @@ mod tests {
         reveal: Reveal,
     }
 
-    /// Two honest parties after commit and reveal. DLEq proving is slow, so tests share them.
+    /// Two honest parties after commit and reveal.
     static PARTIES: LazyLock<(Party, Party, Commitment, Commitment)> = LazyLock::new(|| {
         let alice = generate(&mut OsRng, &SWAP, Role::Alice).unwrap();
         let bob = generate(&mut OsRng, &SWAP, Role::Bob).unwrap();
@@ -450,7 +425,6 @@ mod tests {
     #[test]
     fn spec_3_2_r3_7_rejects_a_copy_of_the_verifiers_own_share() {
         let (alice, _, c_a, c_b) = &*PARTIES;
-        // Alice's own reveal, played back to her as if it were Bob's share.
         assert_eq!(
             verify_reveal(
                 &SWAP,
@@ -480,8 +454,7 @@ mod tests {
         );
     }
 
-    /// ADV-01: Bob tries `S_b = X − S_a`, so that `S_a + S_b = X` with `X` his alone. He
-    /// doesn't know the discrete log of `S_b`, so he can't prove it.
+    /// ADV-01: Bob tries `S_b = X − S_a`, so that `S_a + S_b = X` with `X` his alone.
     #[test]
     fn adv_01_rogue_key_is_rejected() {
         let (alice, bob, _, c_b) = &*PARTIES;
@@ -500,17 +473,15 @@ mod tests {
         };
         rogue.dleq = x.dleq.clone();
 
-        // Committed before seeing S_a (the protocol's order): the commitment catches it.
         assert_eq!(alice_checks(&rogue, c_b), Err(RevealError::Commitment));
-        // Even with a commitment to the rogue key, no proof verifies for it.
         assert!(matches!(
             alice_checks(&rogue, &commitment_for(&rogue)),
             Err(RevealError::Dleq | RevealError::PokPallas)
         ));
     }
 
-    /// ADV-02: `S^P` and `S^S` with different discrete logs, so revealing the secp256k1
-    /// share on Bitcoin would not unlock the Zcash side.
+    /// ADV-02: `S^P` and `S^S` with different discrete logs, so revealing the secp256k1 share
+    /// on Bitcoin would not unlock the Zcash side.
     #[test]
     fn adv_02_mismatched_twins_are_rejected() {
         let (alice, bob, _, _) = &*PARTIES;

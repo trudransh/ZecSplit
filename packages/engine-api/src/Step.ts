@@ -10,6 +10,6 @@ export type Step = { kind: StepKind, status: StepStatus,
  */
 confirmations: Confirmations | null, 
 /**
- * Full txid. The UI middle-truncates it for display and always copies it in full.
+ * Full txid.
  */
 txid: string | null, deadline: Deadline | null, };

@@ -1,7 +1,4 @@
-//! Secret newtypes (AGENTS.md NEVER-2, guard G-L1). Each is zeroed on drop and has no
-//! `Debug`, `Display`, `Clone` or `Serialize`, so a secret can't be printed, logged,
-//! copied or sent by accident. The only way to read one is `expose_secret`, which keeps
-//! every use greppable.
+//! Secret newtypes (AGENTS.md NEVER-2, guard G-L1).
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -12,8 +9,7 @@ macro_rules! secret_type {
         pub struct $name([u8; 32]);
 
         impl $name {
-            /// Takes ownership of `bytes`. The caller is responsible for zeroizing any copy
-            /// it still holds.
+            /// Takes ownership of `bytes`.
             pub fn from_bytes(bytes: [u8; 32]) -> Self {
                 Self(bytes)
             }
@@ -50,7 +46,6 @@ secret_type!(
 
 secret_type!(
     /// The lock address's spend-authorizing key `ask = σ·(s_a + s_b) mod q` (§3.3-R1).
-    /// Only the party that learns both shares ever builds one.
     Ask
 );
 
@@ -60,7 +55,7 @@ secret_type!(
 );
 
 secret_type!(
-    /// The maker's long-term BIP340 identity key (§2-R1). It signs every quote.
+    /// The maker's long-term BIP340 identity key (§2-R1).
     MakerSecret
 );
 

@@ -1,12 +1,4 @@
-//! Cross-group DLEq between Pallas and secp256k1. PROTOCOL_SPEC §3.2-R2 and §3.2-R3.2.
-//!
-//! A thin wrapper over the vendored Serai `dleq` (see `vendor/dleq/REVIEW.md`). `prove` draws
-//! a share `s` valid in both groups and proves `S^P = [s]·SpendAuthG` and `S^S = [s]·G`;
-//! `verify` checks such a proof against a given `(S^P, S^S)`.
-//!
-//! The transcript is flexible-transcript's `RecommendedTranscript` (BLAKE2b-512, every item
-//! length-prefixed): name `HK_dleq_v1`, then message `swap_id` (32 bytes), then message
-//! `role_byte` (1 byte). `dleq` then appends its generators and both points.
+//! Cross-group DLEq between Pallas and secp256k1.
 
 use dleq::cross_group::{CompromiseLinearDLEq, Generators};
 use flexible_transcript::{RecommendedTranscript, Transcript};
@@ -31,15 +23,13 @@ pub enum DleqError {
     Malformed,
     #[error("invalid DLEq proof, or it proves a different pair of points")]
     Invalid,
-    /// Generator inputs are constants, so this can't happen.
     #[error("DLEq generator derivation failed")]
     Generators,
 }
 
-/// The proven share `s` as its Pallas scalar encoding (little-endian). dleq also returns it
-/// as a secp256k1 scalar; `prove` checks that both are the same integer, so the big-endian
-/// secp256k1 form is just these bytes reversed. No `Debug`, `Display`, `Clone` or
-/// `Serialize`; zeroized on drop.
+/// The proven share `s` as its Pallas scalar encoding (little-endian). dleq also returns it as
+/// a secp256k1 scalar; `prove` checks that both are the same integer, so the big-endian
+/// secp256k1 form is just these bytes reversed.
 pub struct DleqSecret {
     pallas: Zeroizing<[u8; 32]>,
 }
@@ -54,8 +44,7 @@ impl DleqSecret {
 /// The share, `S^P` (32-byte Pallas encoding), `S^S` (SEC1 compressed) and the proof bytes.
 pub type DleqOutput = (DleqSecret, [u8; 32], [u8; 33], Vec<u8>);
 
-/// Primaries are `SpendAuthG` (Orchard, §1) and secp256k1's `G`. Pallas uses the vendored
-/// pasta 0.5, so `SpendAuthG` is rebuilt here; a test pins it to reddsa's basepoint.
+/// Primaries are `SpendAuthG` (Orchard, §1) and secp256k1's `G`.
 fn generators() -> Result<(Generators<pallas::Point>, Generators<ProjectivePoint>), DleqError> {
     let spend_auth_g = pallas::Point::hash_to_curve("z.cash:Orchard")(b"G");
     let pallas_alt = pallas::Point::hash_to_curve(ALT_DOMAIN)(b"");
@@ -82,7 +71,6 @@ pub fn prove<R: RngCore + CryptoRng>(
     role_byte: u8,
 ) -> Result<DleqOutput, DleqError> {
     let generators = generators()?;
-    // dleq derives the scalar from a digest's output, truncated to the shared capacity (254 bits).
     let mut seed = Zeroizing::new([0u8; 32]);
     rng.fill_bytes(seed.as_mut());
     let (proof, (s_p, s_s)) = Proof::prove(
@@ -98,14 +86,12 @@ pub fn prove<R: RngCore + CryptoRng>(
     let pallas = Zeroizing::new(s_p.to_repr());
     let mut secp = Zeroizing::new([0u8; 32]);
     secp.copy_from_slice(&s_s.to_repr());
-    // One integer in both groups (§1), so reversing the bytes converts between encodings.
     if !pallas.iter().rev().eq(secp.iter()) {
         return Err(DleqError::Invalid);
     }
     let secret = DleqSecret { pallas };
 
     let mut bytes = Vec::new();
-    // Writing into a Vec can't fail.
     proof.write(&mut bytes).map_err(|_| DleqError::Malformed)?;
     Ok((secret, point_p, point_s, bytes))
 }
@@ -199,12 +185,11 @@ mod tests {
             s.as_slice()
         );
 
-        // Below dleq's mutual capacity of 2^254 (§1, ADR-028).
         assert!(secret.pallas()[31] < 0x40);
     }
 
-    /// `S^P` leaves the vendored pasta 0.5 as bytes; pasta 0.6.1 (orchard, §3.3) must read
-    /// back the same point.
+    /// `S^P` leaves the vendored pasta 0.5 as bytes; pasta 0.6.1 (orchard, §3.3) must read back
+    /// the same point.
     #[test]
     fn spec_3_2_r2_pallas_point_decodes_with_pasta_0_6() {
         let (_, p, _, _) = &*A;
@@ -213,8 +198,8 @@ mod tests {
         assert_eq!(point.map(|q| q.to_bytes()), Some(*p));
     }
 
-    /// `S^S` is the adaptor point on Bitcoin, so rust-secp256k1 (the `bitcoin` crate's
-    /// backend) must parse it and agree that it is `[s]·G`.
+    /// `S^S` is the adaptor point on Bitcoin, so rust-secp256k1 (the `bitcoin` crate's backend)
+    /// must parse it and agree that it is `[s]·G`.
     #[test]
     fn spec_3_2_r2_secp_point_matches_rust_secp256k1() {
         let (secret, _, s, _) = &*A;

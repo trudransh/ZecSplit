@@ -1,6 +1,5 @@
-//! The maker identity key (PROTOCOL_SPEC §2-R1, §2-R2): a long-term BIP340 key that signs
-//! every quote. The engine pins the maker's public key, so a quote board or a man in the
-//! middle can relay quotes but never forge one (THREAT_MODEL T23, ADV-14).
+//! The maker identity key (PROTOCOL_SPEC §2-R1, §2-R2): a long-term BIP340 key that signs every
+//! quote.
 
 use secp256k1::{Keypair, Message, Secp256k1, SecretKey, XOnlyPublicKey, schnorr};
 

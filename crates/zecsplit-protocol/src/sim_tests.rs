@@ -1,7 +1,4 @@
 //! In-process harness (T-031): Alice and Bob against each other on a simulated chain.
-//! Actions of one machine become inputs of the other; each round mines one block. The
-//! chain enforces what Bitcoin does: relative timelocks (BIP68) and that conflicting
-//! spends of one output can't both confirm. Scenario IDs are TEST_PLAN §2.
 
 use crate::alice::{AliceAction, AliceInput, AliceState, step_alice};
 use crate::bob::{BobAction, BobInput, BobState, step_bob};
@@ -21,8 +18,6 @@ struct Faults {
     alice_never_pays: bool,
     bob_silent_after_zec: bool,
     bob_never_refunds: bool,
-    /// S-07: lose all actions of Alice's n-th / Bob's n-th step (a crash right after the
-    /// write-ahead persist), then resume.
     crash_alice_at: Option<usize>,
     crash_bob_at: Option<usize>,
 }
@@ -188,7 +183,6 @@ impl Sim {
             && Self::h(self.redeem).is_none()
         {
             self.cancel = TxStatus::Mempool;
-            // The cancel and the redeem spend the same output; the cancel evicts it here.
             self.redeem = TxStatus::Unseen;
         }
     }

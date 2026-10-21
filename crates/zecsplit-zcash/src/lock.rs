@@ -1,5 +1,5 @@
-//! The lock address (PROTOCOL_SPEC §3.3-R3, §3.3-R4): an Orchard-only Unified Address
-//! whose notes land in the Ironwood pool and can be spent only with `ask = σ·(s_a + s_b)`.
+//! The lock address (PROTOCOL_SPEC §3.3-R3, §3.3-R4): an Orchard-only Unified Address whose
+//! notes land in the Ironwood pool and can be spent only with `ask = σ·(s_a + s_b)`.
 
 use orchard::keys::{FullViewingKey, Scope};
 use zcash_address::unified::{Encoding, Fvk, Revision, Ufvk, Uitem};
@@ -7,8 +7,7 @@ use zcash_keys::address::UnifiedAddress;
 use zcash_protocol::consensus::{BlockHeight, Parameters};
 use zcash_protocol::local_consensus::LocalNetwork;
 
-/// The lock's viewing material. Private between Alice and Bob (§3.3-R5): no `Debug`, so it
-/// can't end up in a log line.
+/// The lock's viewing material.
 pub struct LockKeys {
     pub ufvk: String,
     pub ua: String,
@@ -17,18 +16,14 @@ pub struct LockKeys {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LockKeyError {
-    /// §3.3-R3: abort. With honest inputs this has negligible probability, so treat it
-    /// as a bug signal, not a retryable error.
     #[error("ak ‖ nk ‖ rivk is not a valid Orchard full viewing key")]
     InvalidFvk,
     #[error("could not encode the lock keys: {0}")]
     Encoding(String),
 }
 
-/// §3.3-R3/R4: `FVK = from_bytes(ak ‖ nk ‖ rivk)`, the lock UA at index 0 (external
-/// scope, Orchard receiver only) and the Orchard-only UFVK. `from_bytes` enforces every
-/// structural check §3.3-R3 asks for: `ak` valid with `ỹ = 0`, canonical `nk` and `rivk`,
-/// and valid external and internal `ivk`.
+/// §3.3-R3/R4: `FVK = from_bytes(ak ‖ nk ‖ rivk)`, the lock UA at index 0 (external scope,
+/// Orchard receiver only) and the Orchard-only UFVK.
 pub fn lock_keys<P: Parameters>(
     params: &P,
     ak: &[u8; 32],
@@ -50,8 +45,6 @@ pub fn lock_keys<P: Parameters>(
     )
     .ok_or_else(|| LockKeyError::Encoding("no receiver".into()))?
     .encode(params);
-    // zcash_keys only builds an Orchard-only UFVK behind its `unstable-frost` feature, so
-    // encode the ZIP 316 container directly.
     let ufvk = Ufvk::try_from_items(Revision::R0, vec![Uitem::Data(Fvk::Orchard(fvk_bytes))])
         .map_err(|e| LockKeyError::Encoding(e.to_string()))?
         .encode(&params.network_type());
@@ -64,7 +57,6 @@ pub fn lock_keys<P: Parameters>(
 }
 
 /// Consensus parameters of the devnet: every upgrade through NU7 active from height 1.
-/// Must match `devnet/zebrad.toml` and `devnet/zec-wallet/activation-heights.toml`.
 pub fn regtest() -> LocalNetwork {
     let h = Some(BlockHeight::from_u32(1));
     LocalNetwork {
@@ -111,7 +103,6 @@ mod tests {
         let (nk, rivk) = derive_nk_rivk(&[9; 32]);
         assert!(lock_keys(&regtest(), &key.ak, &nk, &rivk).is_ok());
 
-        // The same point with ỹ = 1: exactly what the σ rule exists to prevent.
         let mut wrong_sign = key.ak;
         wrong_sign[31] |= 0x80;
         assert_eq!(
@@ -132,15 +123,14 @@ mod tests {
         assert_eq!(ua.receiver_types(), vec![Typecode::ORCHARD]);
         assert!(keys.ufvk.starts_with("uviewregtest1"));
 
-        // T-011 imports the UFVK into the wallet DB through this decoder.
         let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&regtest(), &keys.ufvk).unwrap();
         assert!(ufvk.orchard().is_some());
         assert!(ufvk.sapling().is_none());
         assert_eq!(ufvk.orchard().unwrap().to_bytes(), keys.fvk_bytes);
     }
 
-    /// Regression vector (PROTOCOL_SPEC §9, formalized in T-014): shares seeded 1 and 2,
-    /// T = [9; 32]. Any change here breaks compatibility with every existing lock.
+    /// Regression vector (PROTOCOL_SPEC §9, formalized in T-014): shares seeded 1 and 2, T =
+    /// [9; 32].
     #[test]
     fn spec_9_lock_address_regression_vector() {
         assert_eq!(
