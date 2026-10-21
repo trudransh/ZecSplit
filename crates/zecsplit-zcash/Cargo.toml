@@ -11,3 +11,12 @@ workspace = true
 
 [dependencies]
 zecsplit-crypto = { path = "../zecsplit-crypto" }
+orchard.workspace = true
+pasta_curves.workspace = true
+pczt.workspace = true
+reddsa.workspace = true
+zcash_client_backend.workspace = true
+zcash_client_sqlite.workspace = true
+zcash_keys.workspace = true
+zcash_primitives.workspace = true
+zcash_protocol.workspace = true

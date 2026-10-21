@@ -14,6 +14,18 @@ publish = false
 [workspace.dependencies]
 bitcoin = "=0.32.11"
 
+# Zcash pre-release set for NU7 (ADR-007). These move together; bump them as one.
+orchard = "=0.16.0"
+pasta_curves = "=0.6.1"
+pczt = "=0.10.0-pre.2"
+reddsa = "=0.6.1"
+zcash_client_backend = { version = "=0.25.0-pre.2", features = ["pczt", "lightwalletd-tonic-transport"] }
+# Must match the backend's `transparent-inputs` cfg, which its `pczt` feature turns on.
+zcash_client_sqlite = { version = "=0.23.0-pre.2", features = ["transparent-inputs"] }
+zcash_keys = "=0.17.0-pre.2"
+zcash_primitives = "=0.31.0-pre.2"
+zcash_protocol = "=0.11.0-pre.1"
+
 # AGENTS.md NEVER-7, enforced by the compiler instead of review.
 [workspace.lints.rust]
 unsafe_code = "forbid"
