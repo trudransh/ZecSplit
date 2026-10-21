@@ -480,6 +480,48 @@ mod tests {
         );
     }
 
+    /// ADV-01: Bob tries `S_b = X − S_a`, so that `S_a + S_b = X` with `X` his alone. He
+    /// doesn't know the discrete log of `S_b`, so he can't prove it.
+    #[test]
+    fn adv_01_rogue_key_is_rejected() {
+        let (alice, bob, _, c_b) = &*PARTIES;
+        let x = generate(&mut OsRng, &SWAP, Role::Bob).unwrap();
+        let s_a_p = pallas::Point::from_bytes(&alice.keys.share_pub.pallas).unwrap();
+        let x_p = pallas::Point::from_bytes(&x.share_pub.pallas).unwrap();
+        let secp = Secp256k1::new();
+        let s_a_s = PublicKey::from_slice(&alice.keys.share_pub.secp)
+            .unwrap()
+            .negate(&secp);
+        let x_s = PublicKey::from_slice(&x.share_pub.secp).unwrap();
+        let mut rogue = bob.reveal.clone();
+        rogue.share_pub = SharePub {
+            pallas: (x_p - s_a_p).to_bytes(),
+            secp: x_s.combine(&s_a_s).unwrap().serialize(),
+        };
+        rogue.dleq = x.dleq.clone();
+
+        // Committed before seeing S_a (the protocol's order): the commitment catches it.
+        assert_eq!(alice_checks(&rogue, c_b), Err(RevealError::Commitment));
+        // Even with a commitment to the rogue key, no proof verifies for it.
+        assert!(matches!(
+            alice_checks(&rogue, &commitment_for(&rogue)),
+            Err(RevealError::Dleq | RevealError::PokPallas)
+        ));
+    }
+
+    /// ADV-02: `S^P` and `S^S` with different discrete logs, so revealing the secp256k1
+    /// share on Bitcoin would not unlock the Zcash side.
+    #[test]
+    fn adv_02_mismatched_twins_are_rejected() {
+        let (alice, bob, _, _) = &*PARTIES;
+        let mut r = bob.reveal.clone();
+        r.share_pub.secp = alice.keys.share_pub.secp;
+        assert_eq!(
+            alice_checks(&r, &commitment_for(&r)),
+            Err(RevealError::Dleq)
+        );
+    }
+
     #[test]
     fn spec_4_5_r2_recovered_share_must_open_the_public_share() {
         let (alice, bob, _, _) = &*PARTIES;
