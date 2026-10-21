@@ -3518,6 +3518,8 @@ dependencies = [
  "pasta_curves 0.6.1",
  "pczt",
  "reddsa",
+ "secp256k1 0.29.1",
+ "serde_json",
  "thiserror 2.0.21",
  "zcash_address",
  "zcash_client_backend",
