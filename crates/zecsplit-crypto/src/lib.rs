@@ -6,6 +6,7 @@ mod identity;
 mod reveal;
 mod secret;
 mod shared_key;
+mod transcript;
 
 pub use identity::{QuoteSigError, maker_public_key, quote_digest, sign_quote, verify_quote};
 pub use rand_core;
@@ -15,3 +16,4 @@ pub use reveal::{
 };
 pub use secret::{Ask, BtcSecret, MakerSecret, Share};
 pub use shared_key::{KeyError, SharePub, SharedKey, Sigma, derive_nk_rivk, shared_ak, shared_ask};
+pub use transcript::{Network, TranscriptError, TranscriptInput, transcript};

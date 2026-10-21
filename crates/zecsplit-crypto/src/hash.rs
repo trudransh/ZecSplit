@@ -6,6 +6,8 @@ pub(crate) const HK_NK_V1: &[u8; 16] = b"HK_nk_v1\0\0\0\0\0\0\0\0";
 pub(crate) const HK_POK_V1: &[u8; 16] = b"HK_pok_v1\0\0\0\0\0\0\0";
 pub(crate) const HK_QUOTE_V1: &[u8; 16] = b"HK_quote_v1\0\0\0\0\0";
 pub(crate) const HK_RIVK_V1: &[u8; 16] = b"HK_rivk_v1\0\0\0\0\0\0";
+// Exactly 16 bytes, so no padding.
+pub(crate) const HK_TRANSCRIPT_V1: &[u8; 16] = b"HK_transcript_v1";
 
 /// `H256(tag, m)`.
 pub(crate) fn h256(tag: &[u8; 16], msg: &[u8]) -> [u8; 32] {
