@@ -9,6 +9,11 @@ rust-version = "1.93"
 license = "MIT OR Apache-2.0"
 publish = false
 
+# Every external crate is pinned exactly, once, here (AGENTS.md NEVER-6, ADR-026).
+# Each pin also needs a row in STACK.md.
+[workspace.dependencies]
+bitcoin = "=0.32.11"
+
 # AGENTS.md NEVER-7, enforced by the compiler instead of review.
 [workspace.lints.rust]
 unsafe_code = "forbid"
