@@ -10,6 +10,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+async-trait.workspace = true
+getrandom.workspace = true
 zecsplit-crypto = { path = "../zecsplit-crypto" }
 orchard.workspace = true
 pasta_curves.workspace = true
@@ -24,5 +26,7 @@ zcash_primitives.workspace = true
 zcash_protocol.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
 secp256k1.workspace = true
 serde_json.workspace = true
