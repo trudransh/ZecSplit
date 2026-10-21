@@ -1,9 +1,11 @@
 //! Shared FVK/UFVK and lock UA, ZIP 321 URI, lock detection, sweep via PCZT.
 
 mod lock;
+mod sweep;
 mod watch;
 
 pub use lock::{LockKeyError, LockKeys, lock_keys, regtest};
+pub use sweep::{SweepError, sweep};
 pub use watch::{LockStatus, WatchError, lock_status};
 
 #[cfg(test)]

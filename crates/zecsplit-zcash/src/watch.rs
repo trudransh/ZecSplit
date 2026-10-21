@@ -5,6 +5,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use getrandom::SysRng;
+use getrandom::rand_core::UnwrapErr;
 use zcash_client_backend::data_api::chain::{BlockCache, BlockSource, error as chain_error};
 use zcash_client_backend::data_api::scanning::ScanRange;
 use zcash_client_backend::data_api::wallet::ConfirmationsPolicy;
@@ -38,9 +40,12 @@ pub enum WatchError {
     ZeroConfirmations,
 }
 
-fn wallet_err(e: impl std::fmt::Display) -> WatchError {
+pub(crate) fn wallet_err(e: impl std::fmt::Display) -> WatchError {
     WatchError::Wallet(e.to_string())
 }
+
+pub(crate) type Client = CompactTxStreamerClient<tonic::transport::Channel>;
+pub(crate) type LockDb<P> = WalletDb<rusqlite::Connection, P, SystemClock, UnwrapErr<SysRng>>;
 
 /// §4.3-R1/R2: scan with the lock UFVK and report what the lock address holds.
 pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
@@ -52,12 +57,42 @@ pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
     min_conf: u32,
 ) -> Result<LockStatus, WatchError> {
     let min_conf = NonZeroU32::new(min_conf).ok_or(WatchError::ZeroConfirmations)?;
+    let (_, db) = synced_wallet(params, db_path, ufvk, birthday_height, server).await?;
+    let policy = ConfirmationsPolicy::new_symmetrical(min_conf, false);
+    let Some(summary) = db.get_wallet_summary(policy).map_err(wallet_err)? else {
+        return Ok(LockStatus {
+            total: 0,
+            confirmed: 0,
+            tip: 0,
+        });
+    };
+    let (mut total, mut confirmed) = (0u64, 0u64);
+    for balance in summary.account_balances().values() {
+        for pool in [balance.ironwood_balance(), balance.orchard_balance()] {
+            total += u64::from(pool.total());
+            confirmed += u64::from(pool.spendable_value());
+        }
+    }
+    Ok(LockStatus {
+        total,
+        confirmed,
+        tip: u32::from(summary.chain_tip_height()),
+    })
+}
+
+/// §4.3-R1: opens the lock wallet, imports the UFVK on first use, and scans to the tip.
+pub(crate) async fn synced_wallet<P: Parameters + Clone + Send + 'static>(
+    params: &P,
+    db_path: &Path,
+    ufvk: &str,
+    birthday_height: u32,
+    server: &str,
+) -> Result<(Client, LockDb<P>), WatchError> {
     let mut client = CompactTxStreamerClient::connect(server.to_string())
         .await
         .map_err(|e| WatchError::Server(e.to_string()))?;
-    let rng = getrandom::rand_core::UnwrapErr(getrandom::SysRng);
-    let mut db =
-        WalletDb::for_path(db_path, params.clone(), SystemClock, rng).map_err(wallet_err)?;
+    let mut db = WalletDb::for_path(db_path, params.clone(), SystemClock, UnwrapErr(SysRng))
+        .map_err(wallet_err)?;
     zcash_client_sqlite::wallet::init::init_wallet_db(&mut db, None).map_err(wallet_err)?;
 
     if db.get_account_ids().map_err(wallet_err)?.is_empty() {
@@ -86,27 +121,7 @@ pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
     sync::run(&mut client, params, &cache, &mut db, 100)
         .await
         .map_err(|e| WatchError::Server(e.to_string()))?;
-
-    let policy = ConfirmationsPolicy::new_symmetrical(min_conf, false);
-    let Some(summary) = db.get_wallet_summary(policy).map_err(wallet_err)? else {
-        return Ok(LockStatus {
-            total: 0,
-            confirmed: 0,
-            tip: 0,
-        });
-    };
-    let (mut total, mut confirmed) = (0u64, 0u64);
-    for balance in summary.account_balances().values() {
-        for pool in [balance.ironwood_balance(), balance.orchard_balance()] {
-            total += u64::from(pool.total());
-            confirmed += u64::from(pool.spendable_value());
-        }
-    }
-    Ok(LockStatus {
-        total,
-        confirmed,
-        tip: u32::from(summary.chain_tip_height()),
-    })
+    Ok((client, db))
 }
 
 /// The smallest `BlockCache`: blocks live in memory only for the duration of one scan.

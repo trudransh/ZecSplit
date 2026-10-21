@@ -20,7 +20,7 @@ devnet-up:
 
 # Integration tests against the running devnet (`just devnet-up` first).
 devnet-test:
-    ZECSPLIT_DEVNET=1 cargo test -p zecsplit-zcash --test devnet_lock -- --nocapture
+    ZECSPLIT_DEVNET=1 cargo test -p zecsplit-zcash --test devnet -- --nocapture --test-threads=1
 
 devnet-down:
     docker compose -f devnet/docker-compose.yml down

@@ -17,13 +17,16 @@ orchard.workspace = true
 pasta_curves.workspace = true
 pczt.workspace = true
 reddsa.workspace = true
+rusqlite.workspace = true
 thiserror.workspace = true
+tonic.workspace = true
 zcash_address.workspace = true
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true
 zcash_keys.workspace = true
 zcash_primitives.workspace = true
 zcash_protocol.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
