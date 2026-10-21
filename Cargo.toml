@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Vendored crates keep their upstream lints and formatting (vendor/*/REVIEW.md).
+exclude = ["vendor/dleq", "vendor/pasta_curves"]
 
 [workspace.package]
 version = "0.0.0"
@@ -20,6 +22,15 @@ serde_json = "=1.0.154"
 thiserror = "=2.0.21"
 ts-rs = "=12.0.1"
 zeroize = { version = "=1.9.1", features = ["derive"] }
+
+# Cross-group DLEq (§3.2-R2, ADR-005), plan B: dleq stays on group 0.13, so it gets its Pallas
+# from a vendored pasta_curves 0.5.1 with the zeroize feature backported. vendor/dleq/REVIEW.md.
+dleq = { path = "vendor/dleq", features = ["experimental", "serialize"] }
+flexible-transcript = { version = "=0.3.4", features = ["recommended"] }
+k256 = { version = "=0.13.4", default-features = false, features = ["arithmetic", "bits", "hash2curve"] }
+pasta_curves_05 = { package = "pasta_curves", path = "vendor/pasta_curves", features = ["alloc", "zeroize"] }
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
+sha2 = "=0.10.9"
 
 # Zcash pre-release set for NU7 (ADR-007). These move together; bump them as one.
 orchard = "=0.16.0"
