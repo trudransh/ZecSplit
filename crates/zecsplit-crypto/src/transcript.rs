@@ -16,8 +16,7 @@
 use crate::hash::{HK_TRANSCRIPT_V1, h256};
 use crate::{Commitment, Reveal};
 
-/// The quote's `network` (§2) as it enters `T`. Mirrors `zecsplit_protocol::Network`, which
-/// this crate can't depend on.
+/// The quote's `network` (§2) as it enters `T`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Network {
     Regtest,
@@ -41,7 +40,6 @@ pub struct TranscriptInput<'a> {
     pub protocol_version: u16,
     pub swap_id: [u8; 32],
     pub network: Network,
-    /// `quote_digest(canonical_json(quote))`.
     pub quote_hash: [u8; 32],
     pub c_a: Commitment,
     pub c_b: Commitment,
@@ -231,8 +229,6 @@ mod tests {
         let (a, b) = (reveal(0x10, 40, "alice-addr"), reveal(0x20, 40, "bob-addr"));
         let k = 3;
 
-        // Within a reveal: the first k bytes of A's payout_addr slide back across the three
-        // fixed-size PoKs into the end of A's dleq.
         let tail: Vec<u8> = [
             &a.dleq[..],
             &a.pok_p,
@@ -251,8 +247,6 @@ mod tests {
         assert_eq!(unprefixed(&a, &b), unprefixed(&a2, &b));
         assert_ne!(t(&a, &b, |_| {}), t(&a2, &b, |_| {}));
 
-        // Across reveals: the last k bytes of A's payout_addr slide forward across B's
-        // fixed-size keys and nonce into the front of B's dleq.
         let span: Vec<u8> = [
             a.payout_addr.as_bytes(),
             &b.share_pub.pallas,

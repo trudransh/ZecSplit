@@ -1,7 +1,4 @@
 //! The two-party Zcash spend key (PROTOCOL_SPEC §3.3-R1, §3.3-R2).
-//!
-//! The lock address is controlled by `ask = σ·(s_a + s_b)`. Each party holds one share;
-//! whoever learns the other's share (from a Bitcoin adaptor signature) can sweep.
 
 use pasta_curves::group::ff::{FromUniformBytes, PrimeField};
 use pasta_curves::group::{Group, GroupEncoding};
@@ -11,8 +8,8 @@ use zeroize::Zeroizing;
 use crate::hash::{HK_NK_V1, HK_RIVK_V1, h512};
 use crate::{Ask, Share};
 
-/// A party's public share (§1): `S^P = [s]·SpendAuthG` on Pallas and `S^S = [s]·G` on
-/// secp256k1 (SEC1 compressed). `S^S` is also that party's Bitcoin adaptor point.
+/// A party's public share (§1): `S^P = [s]·SpendAuthG` on Pallas and `S^S = [s]·G` on secp256k1
+/// (SEC1 compressed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SharePub {
     pub pallas: [u8; 32],
@@ -49,7 +46,6 @@ pub fn shared_ak(a: &SharePub, b: &SharePub) -> Result<SharedKey, KeyError> {
     if bool::from(sum.is_identity()) {
         return Err(KeyError::IdentitySum);
     }
-    // The top bit of a Pallas point encoding is ỹ, the sign of its y-coordinate.
     let (sigma, ak) = if sum.to_bytes()[31] >> 7 == 0 {
         (Sigma::Plus, sum)
     } else {
@@ -61,8 +57,7 @@ pub fn shared_ak(a: &SharePub, b: &SharePub) -> Result<SharedKey, KeyError> {
     })
 }
 
-/// §3.3-R1: `ask = σ·(s_a + s_b) mod q`. The shares are never negated on their own; `σ`
-/// is applied only to the sum, at signing time.
+/// §3.3-R1: `ask = σ·(s_a + s_b) mod q`.
 pub fn shared_ask(a: &Share, b: &Share, sigma: Sigma) -> Result<Ask, KeyError> {
     let sum = Zeroizing::new(*share_scalar(a)? + *share_scalar(b)?);
     let ask = Zeroizing::new(match sigma {
@@ -72,8 +67,7 @@ pub fn shared_ask(a: &Share, b: &Share, sigma: Sigma) -> Result<Ask, KeyError> {
     Ok(Ask::from_bytes(ask.to_repr()))
 }
 
-/// §3.3-R2 (ADR-006): `nk` and `rivk` come from the transcript `T`, so neither party
-/// chooses or biases the viewing keys and both derive the same lock address.
+/// §3.3-R2: derives `nk` and `rivk` from the transcript `T`.
 pub fn derive_nk_rivk(transcript: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
     let nk = pallas::Base::from_uniform_bytes(&h512(HK_NK_V1, transcript));
     let rivk = pallas::Scalar::from_uniform_bytes(&h512(HK_RIVK_V1, transcript));
@@ -88,8 +82,6 @@ fn pallas_point(bytes: &[u8; 32]) -> Result<pallas::Point, KeyError> {
 
 fn share_scalar(share: &Share) -> Result<Zeroizing<pallas::Scalar>, KeyError> {
     let bytes = share.expose_secret();
-    // §1 (ADR-028): a share is an integer in [1, 2^254), the cross-group DLEq's range, so
-    // its top two bits are clear. 2^254 is below both group orders.
     if bytes[31] & 0xc0 != 0 || bytes == &[0; 32] {
         return Err(KeyError::InvalidShare);
     }
@@ -110,8 +102,7 @@ mod tests {
         reddsa::VerificationKey::from(&sk).into()
     }
 
-    /// A deterministic share in [1, 2^254) and its public Pallas share. The secp half is
-    /// left zero: nothing in §3.3 reads it.
+    /// A deterministic share in [1, 2^254) and its public Pallas share.
     fn share(seed: u8) -> (Share, SharePub) {
         let mut s: [u8; 32] = h512(b"test_share\0\0\0\0\0\0", &[seed])[..32]
             .try_into()
@@ -212,8 +203,7 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10_000))]
 
-        /// TEST_PLAN §1: the σ rule over random pairs. `ak` always has ỹ = 0 and always
-        /// equals `[shared_ask]·SpendAuthG`.
+        /// TEST_PLAN §1: the σ rule over random pairs.
         #[test]
         fn spec_3_3_r1_sigma_rule_holds_for_random_pairs(
             mut sa in any::<[u8; 32]>(),

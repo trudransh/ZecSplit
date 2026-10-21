@@ -1,4 +1,4 @@
-//! Wire messages, Alice/Bob state machines, write-ahead store, recovery file. PROTOCOL_SPEC §6–7.
+//! Wire messages, Alice/Bob state machines, write-ahead store, recovery file.
 
 pub mod alice;
 pub mod bob;

@@ -1,7 +1,4 @@
-//! Lock detection (PROTOCOL_SPEC §4.3, T-011). The lock UFVK is imported into a wallet
-//! database, compact blocks are scanned from a light server, and the unspent lock notes are
-//! summed. Bob MUST point this at his own Zebra node (§4.3-R4, ADR-009): a light server
-//! he doesn't control could show him a note that doesn't exist (T4).
+//! Lock detection (PROTOCOL_SPEC §4.3, T-011).
 
 use std::num::NonZeroU32;
 use std::path::Path;
@@ -24,9 +21,7 @@ use zcash_protocol::consensus::{BlockHeight, Parameters};
 /// The lock address as of the latest scan (INTERFACES §1.2 `LockStatus`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LockStatus {
-    /// Zatoshis in unspent lock notes at any depth.
     pub total: u64,
-    /// Zatoshis in unspent lock notes with at least `min_conf` confirmations.
     pub confirmed: u64,
     pub tip: u32,
 }
@@ -47,9 +42,7 @@ fn wallet_err(e: impl std::fmt::Display) -> WatchError {
     WatchError::Wallet(e.to_string())
 }
 
-/// §4.3-R1/R2: scan with the lock UFVK and report what the lock address holds. `db_path`
-/// is this swap's own wallet database; the UFVK is imported on first use with a birthday
-/// at `birthday_height`, which must be at or below the height the payment can appear.
+/// §4.3-R1/R2: scan with the lock UFVK and report what the lock address holds.
 pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
     params: &P,
     db_path: &Path,
@@ -69,7 +62,6 @@ pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
 
     if db.get_account_ids().map_err(wallet_err)?.is_empty() {
         let ufvk = UnifiedFullViewingKey::decode(params, ufvk).map_err(|_| WatchError::BadUfvk)?;
-        // The birthday is the chain state just before the first block to scan.
         let tree_state = client
             .get_tree_state(BlockId {
                 height: u64::from(birthday_height.saturating_sub(1)),
@@ -105,7 +97,6 @@ pub async fn lock_status<P: Parameters + Clone + Send + 'static>(
     };
     let (mut total, mut confirmed) = (0u64, 0u64);
     for balance in summary.account_balances().values() {
-        // Since NU6.3, payments to Orchard receivers land in Ironwood; count both pools.
         for pool in [balance.ironwood_balance(), balance.orchard_balance()] {
             total += u64::from(pool.total());
             confirmed += u64::from(pool.spendable_value());

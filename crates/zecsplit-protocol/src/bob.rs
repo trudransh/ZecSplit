@@ -1,13 +1,4 @@
-//! Bob, the maker (PROTOCOL_SPEC §6.2). He has BTC and wants ZEC.
-//!
-//! The rules this machine exists to enforce, in order of what costs funds:
-//! - `tx_lock` is broadcast only after Alice's cancel signature and refund adaptor
-//!   signature are verified (§3.5-R5);
-//! - `esig_B` goes out only for the exact quoted ZEC, confirmed on his own node (§4.3, §5.5);
-//! - after a cancel confirms, he refunds within one block and fee-bumps (§5.3-R5), or he
-//!   loses both assets to Alice's punish (T7);
-//! - once Alice's redeem is visible he recovers `s_a` and sweeps; that has no deadline
-//!   (§4.5-R4).
+//! Bob, the maker (PROTOCOL_SPEC §6.2).
 
 use crate::machine::{
     AbortReason, Alert, ChainView, Outcome, Params, SweepStatus, TxStatus, ZecLock,
@@ -17,50 +8,31 @@ use crate::timers::{cancel_valid, needs_cpfp};
 /// §5.3-R5: CPFP a refund still unconfirmed one block after broadcast.
 const REFUND_CPFP_AFTER: u32 = 1;
 
-/// §6.2. `SigsExchanged` is folded into `BtcLockBroadcast` (verifying Alice's signatures
-/// is exactly what permits the lock) and `ZecLockConfirmed` into `EncSigSent` (ADR-033).
+/// §6.2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BobState {
-    /// Quote sent. Waiting for `C_A`.
     Quoted,
-    /// `C_B` sent. Waiting for `Reveal_A`.
     Committed,
-    /// `Reveal_B` and the unsigned lock template sent. Waiting for Alice's signatures.
     Revealed,
     BtcLockBroadcast,
-    BtcLockConfirmed {
-        h_lock: u32,
-    },
-    EncSigSent {
-        h_lock: u32,
-    },
-    /// Alice's redeem is visible: `s_a` is recoverable (§4.5-R1). Sweeping the ZEC.
+    BtcLockConfirmed { h_lock: u32 },
+    EncSigSent { h_lock: u32 },
     RedeemSeen,
     ZecSweepBroadcast,
-    CancelBroadcast {
-        h_lock: u32,
-    },
-    Cancelled {
-        h_cancel: u32,
-    },
-    RefundBroadcast {
-        h_cancel: u32,
-        at_tip: u32,
-    },
+    CancelBroadcast { h_lock: u32 },
+    Cancelled { h_cancel: u32 },
+    RefundBroadcast { h_cancel: u32, at_tip: u32 },
     Done(Outcome),
     Aborted(AbortReason),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BobInput {
-    /// Engine restart: re-emit this state's (idempotent) duties.
     Resume,
     PeerCommitted,
     PeerRevealVerified,
-    /// Alice's `sig_cancel` and `esig_refund` verified (§3.5-R4).
     PeerSigsVerified,
     PeerMisbehaved,
-    /// The shell's wall-clock timer: Alice stalled during setup.
     SetupTimedOut,
     Chain(ChainView),
 }
@@ -73,7 +45,6 @@ pub enum BobAction {
     SendSetupSigs,
     BroadcastLock,
     SendEncSig,
-    /// Recover `s_a` from the redeem, check it opens `S_a^P` (§4.5-R2), sweep (§4.5-R3).
     SweepZec,
     BroadcastCancel,
     BroadcastRefund,
@@ -111,7 +82,6 @@ pub fn step_bob(state: BobState, input: &BobInput, p: &Params) -> (BobState, Vec
             S::Committed => (S::Revealed, vec![A::SendReveal, A::SendLockTemplate]),
             _ => (state, vec![]),
         },
-        // §3.5-R5: the only way into a state that broadcasts tx_lock.
         I::PeerSigsVerified => match state {
             S::Revealed => (
                 S::BtcLockBroadcast,
@@ -178,7 +148,6 @@ fn on_chain(state: BobState, v: &ChainView, p: &Params) -> (BobState, Vec<BobAct
                 return done;
             }
             match v.zec_lock {
-                // §4.3-R2/R3: exact amount, every note unspent, enough confirmations.
                 ZecLock::Correct { confirmations } if confirmations >= u32::from(p.n_conf_zec) => {
                     (S::EncSigSent { h_lock }, vec![A::SendEncSig])
                 }
@@ -198,7 +167,6 @@ fn on_chain(state: BobState, v: &ChainView, p: &Params) -> (BobState, Vec<BobAct
                 (S::Done(Outcome::Swapped), vec![])
             }
             SweepStatus::Confirmed { .. } | SweepStatus::Mempool => (S::ZecSweepBroadcast, vec![]),
-            // Alice can't move the notes (she knows only s_a), so Bob retries forever (§4.5-R4).
             SweepStatus::Pending | SweepStatus::NothingToSweep => {
                 (S::RedeemSeen, vec![A::SweepZec])
             }
@@ -215,7 +183,6 @@ fn on_chain(state: BobState, v: &ChainView, p: &Params) -> (BobState, Vec<BobAct
             }
         }
 
-        // §5.3-R5: refund at once.
         S::Cancelled { h_cancel } => match refund_outcome(v, p) {
             Some(done) => done,
             None => (
@@ -246,14 +213,13 @@ fn on_chain(state: BobState, v: &ChainView, p: &Params) -> (BobState, Vec<BobAct
     }
 }
 
-/// Facts that end the lock phase: Alice's redeem is visible, or a cancel is on chain, or
-/// `t1` passed and Bob must cancel himself (§5.2, §5.3-R1).
+/// Facts that end the lock phase: Alice's redeem is visible, or a cancel is on chain, or `t1`
+/// passed and Bob must cancel himself (§5.2, §5.3-R1).
 fn lock_phase_outcome(
     h_lock: u32,
     v: &ChainView,
     p: &Params,
 ) -> Option<(BobState, Vec<BobAction>)> {
-    // Seen is enough: the witness already carries the decrypted signature (§4.5-R1).
     if v.redeem.seen() {
         return Some(on_chain(BobState::RedeemSeen, v, p));
     }
@@ -371,10 +337,8 @@ mod tests {
         let mut v = view(H_LOCK + 2);
         v.zec_lock = ZecLock::Correct { confirmations: 1 };
         assert_eq!(chain(s, v), (s, vec![]));
-        // S-06 / §5.5: wrong amount, however deep, never gets esig_B.
         v.zec_lock = ZecLock::WrongAmount;
         assert_eq!(chain(s, v), (s, vec![]));
-        // ...and at t1 Bob cancels, so Alice's ZEC comes back through the refund.
         assert_eq!(
             chain(s, view(H_LOCK + 19).with_zec(ZecLock::WrongAmount)),
             (
@@ -388,7 +352,6 @@ mod tests {
     fn spec_5_3_r5_bob_refunds_within_one_block() {
         let mut v = view(121);
         v.cancel = TxStatus::Confirmed { height: 121 };
-        // Seeing the cancel confirmed and broadcasting the refund happen in one step.
         assert_eq!(
             chain(S::CancelBroadcast { h_lock: H_LOCK }, v),
             (
@@ -431,7 +394,7 @@ mod tests {
         );
     }
 
-    /// S-03: Alice never pays. Back online long after, one step cancels.
+    /// S-03: Alice never pays.
     #[test]
     fn s_03_alice_never_pays_and_bob_catches_up_after_downtime() {
         assert_eq!(

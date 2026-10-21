@@ -1,10 +1,6 @@
 //! G1 items 2 on the regtest devnet (T-011): ZEC sent to a two-share lock address is seen
 //! through the imported UFVK, with the right total and confirmations.
-//!
-//! Needs `just devnet-up`. Runs only with `ZECSPLIT_DEVNET=1` (`just devnet-test`), since
-//! CI has no devnet; without it the test returns immediately.
 
-// Integration-test helpers aren't `#[test]` fns, so clippy's allow-unwrap-in-tests misses them.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::process::Command;
@@ -69,18 +65,15 @@ async fn spec_4_3_r2_sums_notes_seen_through_the_lock_ufvk() {
         eprintln!("skipped: set ZECSPLIT_DEVNET=1 with `just devnet-up` running");
         return;
     }
-    // A fresh transcript, so every run uses a lock address no earlier run paid.
     let mut transcript = [0; 32];
     getrandom::fill(&mut transcript).unwrap();
     let key = shared_ak(&share_pub(1), &share_pub(2)).unwrap();
     let (nk, rivk) = derive_nk_rivk(&transcript);
     let keys = lock_keys(&regtest(), &key.ak, &nk, &rivk).unwrap();
 
-    // Mature any change an earlier run left in the devnet wallet.
     mine_zec(3);
     let birthday = zebra_height() + 1;
     pay(&keys.ua, 30_000_000);
-    // The devnet wallet's change needs 3 confirmations (ZIP 315) before it can pay again.
     mine_zec(2);
     pay(&keys.ua, 20_000_000);
 
@@ -92,7 +85,6 @@ async fn spec_4_3_r2_sums_notes_seen_through_the_lock_ufvk() {
     assert_eq!(one.total, 50_000_000, "both notes summed");
     assert_eq!(one.confirmed, 50_000_000);
 
-    // The second note has one confirmation, the first four.
     let two = lock_status(&regtest(), &db, &keys.ufvk, birthday, LIGHT_SERVER, 2)
         .await
         .unwrap();

@@ -4,8 +4,8 @@ import type { Window } from "./Window";
 import type { Zatoshis } from "./Zatoshis";
 
 /**
- * The maker's signed quote, verified by the engine (§2-R2) and rendered for the Quote
- * screen (UX_SPEC §2.1).
+ * The maker's signed quote, verified by the engine (§2-R2) and rendered for the Quote screen
+ * (UX_SPEC §2.1).
  */
 export type QuoteView = { quote_id: string, zec_amount: Zatoshis, 
 /**
@@ -13,7 +13,7 @@ export type QuoteView = { quote_id: string, zec_amount: Zatoshis,
  */
 btc_amount: Sats, 
 /**
- * Unix seconds. The UI shows a countdown ("Quote valid for 0:58").
+ * Unix seconds.
  */
 expires_at: number, min_zec: Zatoshis, max_zec: Zatoshis, 
 /**

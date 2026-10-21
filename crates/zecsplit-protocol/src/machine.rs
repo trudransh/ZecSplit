@@ -1,14 +1,4 @@
 //! Types shared by both state machines (PROTOCOL_SPEC §6).
-//!
-//! The machines are pure ("sans-IO"): `step(state, input) -> (state, actions)`. The engine
-//! shell verifies every message and chain fact before it becomes an input, performs the
-//! actions, and persists the returned state **before** performing them (write-ahead,
-//! §6.3-R1). Every action is idempotent, so a crash between persist and act is repaired by
-//! replaying the step.
-//!
-//! Chain input is level-triggered: each tick passes a full [`ChainView`], not "what
-//! changed". Resuming after downtime (§6.3-R2) is just stepping with the current view, and
-//! a machine fast-forwards through every deadline that passed while it was offline.
 
 /// Quote constants the machines need (§2, §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,8 +10,7 @@ pub struct Params {
     pub redeem_margin: u16,
 }
 
-/// A Bitcoin transaction as the shell sees it. For the taker this is the agreement of two
-/// independent sources (§4.2-R1); `SourcesDisagree` is never treated as confirmed (T3).
+/// A Bitcoin transaction as the shell sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TxStatus {
     Unseen,
@@ -54,27 +43,18 @@ impl TxStatus {
 /// A Zcash sweep of the lock notes (§4.5-R3 for Bob, §5.3-R3 for Alice).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SweepStatus {
-    /// Not built or not seen yet.
     Pending,
     Mempool,
-    Confirmed {
-        confirmations: u32,
-    },
-    /// The lock address holds no notes (for example, Alice never paid).
+    Confirmed { confirmations: u32 },
     NothingToSweep,
 }
 
-/// The ZEC lock as Bob's own Zebra node sees it (§4.3-R1/R2, ADR-009). The shell sums the
-/// unspent Ironwood notes at the lock address and compares the total with the quote.
+/// The ZEC lock as Bob's own Zebra node sees it (§4.3-R1/R2, ADR-009).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZecLock {
     Unseen,
-    /// Short or over (§5.5): Bob never sends `esig_B` for it.
     WrongAmount,
-    /// Exactly the quoted amount, every note unspent; `confirmations` of the shallowest note.
-    Correct {
-        confirmations: u32,
-    },
+    Correct { confirmations: u32 },
 }
 
 /// One snapshot of everything on chain that matters to a swap.
@@ -87,27 +67,21 @@ pub struct ChainView {
     pub refund: TxStatus,
     pub punish: TxStatus,
     pub zec_sweep: SweepStatus,
-    /// Bob only; Alice's engine leaves it `Unseen`.
     pub zec_lock: ZecLock,
 }
 
 /// Terminal results (§6.1, §6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// Alice redeemed the BTC; Bob swept the ZEC.
     Swapped,
-    /// Cancel, then refund: each party got its own asset back.
     Refunded,
-    /// Bob never refunded: Alice took the BTC, the ZEC stays locked.
     Punished,
 }
 
 /// Why a swap stopped before any funds were at risk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AbortReason {
-    /// A reveal, a signature or the lock template failed verification (§3.2-R3, §3.5-R4).
     PeerMisbehaved,
-    /// The maker never locked BTC in time (S-02).
     NoLock,
 }
 

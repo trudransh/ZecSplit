@@ -7,7 +7,6 @@ yanked = "deny"
 # ADR-021: unmaintained notice, not a vulnerability. ecdsa_fun's adaptor feature pins bincode 2.
 ignore = [{ id = "RUSTSEC-2025-0141", reason = "bincode via ecdsa_fun adaptor; ADR-021" }]
 
-# AGENTS.md NEVER-6 allowlist.
 [licenses]
 version = 2
 allow = [
@@ -24,13 +23,10 @@ confidence-threshold = 0.9
 unused-allowed-license = "allow"
 private = { ignore = true }
 
-
 [[licenses.exceptions]]
 crate = "hex_lit"
 allow = ["MITNFA"]
 
-# Zlib (permissive) via the Zcash wallet stack: rusqlite -> hashbrown -> foldhash,
-# and zcash_client_backend -> flume -> nanorand.
 [[licenses.exceptions]]
 crate = "foldhash"
 allow = ["Zlib"]
