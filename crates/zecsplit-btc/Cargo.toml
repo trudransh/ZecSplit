@@ -12,3 +12,6 @@ workspace = true
 [dependencies]
 zecsplit-crypto = { path = "../zecsplit-crypto" }
 bitcoin.workspace = true
+ecdsa_fun.workspace = true
+rand_chacha.workspace = true
+sha2.workspace = true
