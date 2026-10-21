@@ -36,22 +36,18 @@ pub enum DleqError {
     Generators,
 }
 
-/// The proven share `s`, as each group's scalar encoding of the same integer.
-/// Deliberately no `Debug`, `Display`, `Clone` or `Serialize`; both copies zeroize on drop.
+/// The proven share `s` as its Pallas scalar encoding (little-endian). dleq also returns it
+/// as a secp256k1 scalar; `prove` checks that both are the same integer, so the big-endian
+/// secp256k1 form is just these bytes reversed. No `Debug`, `Display`, `Clone` or
+/// `Serialize`; zeroized on drop.
 pub struct DleqSecret {
     pallas: Zeroizing<[u8; 32]>,
-    secp: Zeroizing<[u8; 32]>,
 }
 
 impl DleqSecret {
     /// `s` as a Pallas scalar: `F_q` canonical encoding, little-endian.
     pub fn pallas(&self) -> &[u8; 32] {
         &self.pallas
-    }
-
-    /// `s` as a secp256k1 scalar: big-endian.
-    pub fn secp(&self) -> &[u8; 32] {
-        &self.secp
     }
 }
 
@@ -99,12 +95,14 @@ pub fn prove<R: RngCore + CryptoRng>(
     let point_p = (generators.0.primary * *s_p).to_bytes();
     let mut point_s = [0u8; 33];
     point_s.copy_from_slice(&(generators.1.primary * *s_s).to_bytes());
+    let pallas = Zeroizing::new(s_p.to_repr());
     let mut secp = Zeroizing::new([0u8; 32]);
     secp.copy_from_slice(&s_s.to_repr());
-    let secret = DleqSecret {
-        pallas: Zeroizing::new(s_p.to_repr()),
-        secp,
-    };
+    // One integer in both groups (§1), so reversing the bytes converts between encodings.
+    if !pallas.iter().rev().eq(secp.iter()) {
+        return Err(DleqError::Invalid);
+    }
+    let secret = DleqSecret { pallas };
 
     let mut bytes = Vec::new();
     // Writing into a Vec can't fail.
@@ -192,15 +190,16 @@ mod tests {
         let (secret, p, s, _) = &*A;
         assert_eq!(reddsa_ak(secret.pallas()), *p);
 
-        let s_s = k256::Scalar::from_repr((*secret.secp()).into()).unwrap();
+        let mut be = *secret.pallas();
+        be.reverse();
+        let s_s = k256::Scalar::from_repr(be.into()).unwrap();
         assert_eq!(
             (ProjectivePoint::GENERATOR * s_s).to_bytes().as_slice(),
             s.as_slice()
         );
 
-        // One integer, two encodings, below dleq's mutual capacity of 2^254.
-        assert!(secret.pallas().iter().rev().eq(secret.secp().iter()));
-        assert!(secret.secp()[0] < 0x40);
+        // Below dleq's mutual capacity of 2^254 (§1, ADR-028).
+        assert!(secret.pallas()[31] < 0x40);
     }
 
     /// T-015 meets T-010: two real DLEq shares combine into a valid lock key (§3.3-R1).
