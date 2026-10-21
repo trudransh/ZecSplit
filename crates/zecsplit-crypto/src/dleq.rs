@@ -25,27 +25,16 @@ type Proof = CompromiseLinearDLEq<pallas::Point, ProjectivePoint>;
 /// Hash-to-curve domain for both alternate generators (§3.2-R2), with an empty message.
 const ALT_DOMAIN: &str = "HK_dleq_alt_v1";
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DleqError {
-    /// The bytes aren't exactly one proof.
+    #[error("malformed DLEq proof: the bytes aren't exactly one proof")]
     Malformed,
-    /// The proof doesn't verify, or proves a different pair of points.
+    #[error("invalid DLEq proof, or it proves a different pair of points")]
     Invalid,
-    /// A generator failed to derive. Its inputs are constants, so this can't happen.
+    /// Generator inputs are constants, so this can't happen.
+    #[error("DLEq generator derivation failed")]
     Generators,
 }
-
-impl core::fmt::Display for DleqError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(match self {
-            DleqError::Malformed => "malformed DLEq proof",
-            DleqError::Invalid => "invalid DLEq proof",
-            DleqError::Generators => "DLEq generator derivation failed",
-        })
-    }
-}
-
-impl std::error::Error for DleqError {}
 
 /// The proven share `s`, as each group's scalar encoding of the same integer.
 /// Deliberately no `Debug`, `Display`, `Clone` or `Serialize`; both copies zeroize on drop.
