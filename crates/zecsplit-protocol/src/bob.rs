@@ -9,7 +9,7 @@ use crate::timers::{cancel_valid, needs_cpfp};
 const REFUND_CPFP_AFTER: u32 = 1;
 
 /// §6.2.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum BobState {
     Quoted,
     Committed,
@@ -24,6 +24,13 @@ pub enum BobState {
     RefundBroadcast { h_cancel: u32, at_tip: u32 },
     Done(Outcome),
     Aborted(AbortReason),
+}
+
+impl BobState {
+    /// §6.3-R2: terminal swaps are never resumed.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, BobState::Done(_) | BobState::Aborted(_))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

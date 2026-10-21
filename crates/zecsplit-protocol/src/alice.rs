@@ -7,7 +7,7 @@ use crate::timers::{cancel_valid, may_redeem, needs_cpfp, punish_valid};
 const REDEEM_CPFP_AFTER: u32 = 3;
 
 /// §6.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AliceState {
     Quoted,
     Committed,
@@ -24,6 +24,13 @@ pub enum AliceState {
     PunishBroadcast { h_cancel: u32 },
     Done(Outcome),
     Aborted(AbortReason),
+}
+
+impl AliceState {
+    /// §6.3-R2: terminal swaps are never resumed.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, AliceState::Done(_) | AliceState::Aborted(_))
+    }
 }
 
 /// Everything the shell can tell Alice.

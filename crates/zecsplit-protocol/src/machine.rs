@@ -71,7 +71,7 @@ pub struct ChainView {
 }
 
 /// Terminal results (§6.1, §6.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Outcome {
     Swapped,
     Refunded,
@@ -79,7 +79,7 @@ pub enum Outcome {
 }
 
 /// Why a swap stopped before any funds were at risk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AbortReason {
     PeerMisbehaved,
     NoLock,

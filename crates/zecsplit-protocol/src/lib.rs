@@ -1,4 +1,4 @@
-//! Wire messages, Alice/Bob state machines, write-ahead store, recovery file.
+//! Wire messages, Alice/Bob state machines, recovery file.
 
 pub mod alice;
 pub mod bob;
