@@ -1197,6 +1197,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hex-conservative"
@@ -3498,6 +3501,10 @@ dependencies = [
 name = "zecsplit-protocol"
 version = "0.0.0"
 dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
  "zecsplit-btc",
  "zecsplit-crypto",
  "zecsplit-zcash",

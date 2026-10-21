@@ -13,3 +13,7 @@ workspace = true
 zecsplit-crypto = { path = "../zecsplit-crypto" }
 zecsplit-zcash = { path = "../zecsplit-zcash" }
 zecsplit-btc = { path = "../zecsplit-btc" }
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
