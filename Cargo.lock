@@ -3226,6 +3226,8 @@ dependencies = [
  "pasta_curves",
  "pczt",
  "reddsa",
+ "thiserror 2.0.21",
+ "zcash_address",
  "zcash_client_backend",
  "zcash_client_sqlite",
  "zcash_keys",
