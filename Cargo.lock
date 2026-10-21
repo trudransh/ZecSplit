@@ -3027,6 +3027,9 @@ dependencies = [
 [[package]]
 name = "zecsplit-crypto"
 version = "0.0.0"
+dependencies = [
+ "zeroize",
+]
 
 [[package]]
 name = "zecsplit-maker"
