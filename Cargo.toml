@@ -38,3 +38,8 @@ panic = "deny"
 todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
+
+# Crypto in debug builds is 10-50x slower (curve arithmetic, Halo2 proving). Optimize
+# dependencies in dev and test builds; our own crates stay unoptimized for debugging.
+[profile.dev.package."*"]
+opt-level = 2
