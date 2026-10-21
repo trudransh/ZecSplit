@@ -22,5 +22,9 @@ devnet-up:
     devnet/scripts/mine-btc 101
     devnet/scripts/zec-wallet setup
 
+# Integration tests against the running devnet (`just devnet-up` first).
+devnet-test:
+    ZECSPLIT_DEVNET=1 cargo test -p zecsplit-zcash --test devnet_lock -- --nocapture
+
 devnet-down:
     docker compose -f devnet/docker-compose.yml down
