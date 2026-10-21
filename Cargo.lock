@@ -3971,10 +3971,22 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "zecsplit-btc",
  "zecsplit-crypto",
+ "zecsplit-store",
  "zecsplit-zcash",
+]
+
+[[package]]
+name = "zecsplit-store"
+version = "0.0.0"
+dependencies = [
+ "rusqlite",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zecsplit-crypto",
 ]
 
 [[package]]

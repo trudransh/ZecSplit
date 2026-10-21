@@ -4,6 +4,8 @@ use crate::alice::{AliceAction, AliceInput, AliceState, step_alice};
 use crate::bob::{BobAction, BobInput, BobState, step_bob};
 use crate::machine::{ChainView, Outcome, Params, SweepStatus, TxStatus, ZecLock};
 use crate::timers::{cancel_valid, punish_valid};
+use zecsplit_crypto::Role;
+use zecsplit_store::{NewSwap, Store};
 
 const P: Params = Params {
     t1: 20,
@@ -37,10 +39,57 @@ struct Sim {
     faults: Faults,
     alice_steps: usize,
     bob_steps: usize,
+    dir: tempfile::TempDir,
+    alice_db: Store,
+    bob_db: Store,
+}
+
+const SWAP: [u8; 32] = [7; 32];
+
+fn json<T: serde::Serialize>(state: &T) -> String {
+    serde_json::to_string(state).unwrap()
+}
+
+/// One process's store, with the swap created in its first state.
+fn fresh_store(dir: &tempfile::TempDir, role: Role, state_json: &str) -> Store {
+    let name = match role {
+        Role::Alice => "alice.sqlite",
+        Role::Bob => "bob.sqlite",
+    };
+    let mut store = Store::open(&dir.path().join(name)).unwrap();
+    let swap = NewSwap {
+        id: SWAP,
+        role,
+        network: "regtest",
+        quote_json: "{}",
+        t1_height: u32::from(P.t1),
+        t2_height: u32::from(P.t2),
+        state_json,
+    };
+    store.create_swap(&swap, 0).unwrap();
+    store
+}
+
+/// §6.3-R2: a restarted process reads its state back from disk; only live swaps resume.
+fn reopen<T: serde::de::DeserializeOwned>(
+    dir: &tempfile::TempDir,
+    name: &str,
+    terminal: fn(&T) -> bool,
+) -> T {
+    let store = Store::open(&dir.path().join(name)).unwrap();
+    let state: T = serde_json::from_str(&store.state(&SWAP).unwrap().unwrap()).unwrap();
+    let resumed = store.active_swaps().unwrap().iter().any(|s| s.id == SWAP);
+    assert_eq!(
+        resumed,
+        !terminal(&state),
+        "resume set must match terminality"
+    );
+    state
 }
 
 impl Sim {
     fn new(faults: Faults) -> Self {
+        let dir = tempfile::tempdir().unwrap();
         Sim {
             tip: 100,
             lock: TxStatus::Unseen,
@@ -56,6 +105,9 @@ impl Sim {
             faults,
             alice_steps: 0,
             bob_steps: 0,
+            alice_db: fresh_store(&dir, Role::Alice, &json(&AliceState::Quoted)),
+            bob_db: fresh_store(&dir, Role::Bob, &json(&BobState::Quoted)),
+            dir,
         }
     }
 
@@ -90,9 +142,15 @@ impl Sim {
 
     fn alice(&mut self, input: AliceInput) {
         let (next, acts) = step_alice(self.alice, &input, &P);
+        if next != self.alice {
+            self.alice_db
+                .commit_transition(&SWAP, &json(&next), next.is_terminal(), "step", "{}", 0)
+                .unwrap();
+        }
         self.alice = next;
         self.alice_steps += 1;
         if self.faults.crash_alice_at == Some(self.alice_steps) {
+            self.alice = reopen(&self.dir, "alice.sqlite", AliceState::is_terminal);
             return self.alice(AliceInput::Resume);
         }
         for a in acts {
@@ -136,9 +194,15 @@ impl Sim {
 
     fn bob(&mut self, input: BobInput) {
         let (next, acts) = step_bob(self.bob, &input, &P);
+        if next != self.bob {
+            self.bob_db
+                .commit_transition(&SWAP, &json(&next), next.is_terminal(), "step", "{}", 0)
+                .unwrap();
+        }
         self.bob = next;
         self.bob_steps += 1;
         if self.faults.crash_bob_at == Some(self.bob_steps) {
+            self.bob = reopen(&self.dir, "bob.sqlite", BobState::is_terminal);
             return self.bob(BobInput::Resume);
         }
         for a in acts {
@@ -288,7 +352,7 @@ fn s_05_bob_never_refunds_alice_punishes() {
     );
 }
 
-/// S-07: a crash after every single step, on either side, still ends in the same outcome.
+/// S-07: a crash after every single step, on either side, resumes from SQLite and still swaps.
 #[test]
 fn s_07_crash_after_every_step_still_swaps() {
     for n in 1..=60 {

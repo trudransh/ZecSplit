@@ -1,0 +1,18 @@
+[package]
+name = "zecsplit-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rusqlite = { workspace = true, features = ["bundled"] }
+thiserror.workspace = true
+zecsplit-crypto = { path = "../zecsplit-crypto" }
+
+[dev-dependencies]
+tempfile.workspace = true
