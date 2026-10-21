@@ -7,8 +7,6 @@ use bitcoin::{
     transaction,
 };
 
-// DER signature (at most 72 bytes) plus the sighash byte. Sizing the witness with the
-// maximum keeps the estimate within 1 vB of any real signed transaction.
 const MAX_SIG_LEN: usize = 73;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +78,7 @@ pub fn lock_script_pubkey(p: &BtcParams) -> ScriptBuf {
     ScriptBuf::new_p2wsh(&w_script(&p.k_a, &p.k_b).wscript_hash())
 }
 
-/// `V_lock = btc_amount + fee(tx_redeem)`. Bob needs this before he can build `tx_lock`.
+/// `V_lock = btc_amount + fee(tx_redeem)`.
 pub fn lock_value(p: &BtcParams) -> Result<Amount, TxError> {
     if p.btc_amount < p.alice_payout.minimal_non_dust() {
         return Err(TxError::BelowDust("tx_redeem"));
@@ -95,16 +93,13 @@ pub fn lock_value(p: &BtcParams) -> Result<Amount, TxError> {
     p.btc_amount.checked_add(fee).ok_or(TxError::Overflow)
 }
 
-/// Builds the four pre-signed transactions from the quote, keys, addresses and Bob's
-/// unsigned `tx_lock` (§3.4-R1). Both parties run this and must get identical results.
+/// Builds the four pre-signed transactions from the quote, keys, addresses and Bob's unsigned
+/// `tx_lock` (§3.4-R1).
 pub fn build_txs(p: &BtcParams, lock: Psbt) -> Result<SwapTxs, TxError> {
     if p.t1 == 0 || p.t2 == 0 {
         return Err(TxError::ZeroTimelock);
     }
 
-    // §3.4-R2. Alice only sees Bob's claimed witness_utxo. A lie can only hurt Bob: a
-    // malleated tx_lock orphans his own refund path, and Alice pays ZEC only after the
-    // expected txid confirms (§4.2).
     for i in 0..lock.unsigned_tx.input.len() {
         let segwit = lock
             .inputs
@@ -445,8 +440,6 @@ mod tests {
         p.btc_amount = Amount::from_sat(293);
         assert_eq!(lock_value(&p).unwrap_err(), TxError::BelowDust("tx_redeem"));
 
-        // Cancel pays to the longer P2WSH script, so its fee exceeds the redeem fee that
-        // V_lock reserves; at a high fee rate the small surplus can't cover it.
         p.btc_amount = Amount::from_sat(400);
         p.fee_rate_sat_vb = 50;
         let psbt = lock_psbt(&p, segwit_input(), lock_value(&p).unwrap());

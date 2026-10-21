@@ -1,19 +1,15 @@
-//! Engine HTTP API types (INTERFACES §3): the web UI's only contract with the engine
-//! (ADR-002, ADR-023). `cargo test` exports each type to `packages/engine-api/src/` with
-//! ts-rs; the UI imports those files and never hand-writes an API type.
-//!
-//! Nothing here may carry secret material (AGENTS.md NEVER-2): no shares, keys, `ask`
-//! or recovery-file plaintext. The UI renders engine state; it never computes it (T25).
+//! Engine HTTP API types (INTERFACES §3): the web UI's only contract with the engine (ADR-002,
+//! ADR-023).
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// ZEC in zatoshis (1 ZEC = 10^8). Serialized as a JSON number: total supply fits in 2^53.
+/// ZEC in zatoshis (1 ZEC = 10^8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Zatoshis(pub u64);
 
-/// BTC in satoshis. Serialized as a JSON number.
+/// BTC in satoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Sats(pub u64);
@@ -38,7 +34,7 @@ pub struct Health {
     pub unlocked: bool,
 }
 
-/// `POST /api/unlock`. The passphrase is never stored (ARCHITECTURE §4).
+/// `POST /api/unlock`.
 #[derive(Clone, PartialEq, Eq, Deserialize, TS)]
 #[ts(export)]
 pub struct UnlockRequest {
@@ -52,8 +48,8 @@ pub struct QuoteRequest {
     pub zec_amount: Zatoshis,
 }
 
-/// The maker's signed quote, verified by the engine (§2-R2) and rendered for the Quote
-/// screen (UX_SPEC §2.1).
+/// The maker's signed quote, verified by the engine (§2-R2) and rendered for the Quote screen
+/// (UX_SPEC §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct QuoteView {
@@ -61,7 +57,7 @@ pub struct QuoteView {
     pub zec_amount: Zatoshis,
     /// What the user receives at their BTC address.
     pub btc_amount: Sats,
-    /// Unix seconds. The UI shows a countdown ("Quote valid for 0:58").
+    /// Unix seconds.
     pub expires_at: u64,
     pub min_zec: Zatoshis,
     pub max_zec: Zatoshis,
@@ -69,7 +65,7 @@ pub struct QuoteView {
     pub refund_window: Window,
 }
 
-/// `POST /api/swaps`. The engine refuses unless `accept_risks` is true.
+/// `POST /api/swaps`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateSwapRequest {
@@ -105,8 +101,8 @@ pub struct SwapSummary {
     pub outcome: Option<Outcome>,
 }
 
-/// `GET /api/swaps/{id}` and every event on `GET /api/swaps/{id}/events` (SSE): the whole
-/// view model, so the UI can render any screen from one message.
+/// `GET /api/swaps/{id}` and every event on `GET /api/swaps/{id}/events` (SSE): the whole view
+/// model, so the UI can render any screen from one message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct SwapView {
@@ -117,15 +113,14 @@ pub struct SwapView {
     pub btc_address: String,
     /// The vertical stepper, always in UX_SPEC §2.5 order.
     pub steps: Vec<Step>,
-    /// The ZIP 321 URI, built by the engine. Present only once both Bitcoin sources have
-    /// confirmed the maker's lock (§4.2-R2) and until the payment is seen.
+    /// The ZIP 321 URI, built by the engine.
     pub zip321_uri: Option<String>,
     /// When the user must be back online if the maker misbehaves (USER_FLOWS §3).
     pub refund_window: Window,
     /// Whether the user confirmed saving the recovery file (UX_SPEC §2.4).
     pub recovery_saved: bool,
     pub outcome: Option<Outcome>,
-    /// The latest problem, if any. Copy for each code is in UX_SPEC §3.
+    /// The latest problem, if any.
     pub error: Option<ErrorCode>,
 }
 
@@ -136,7 +131,7 @@ pub struct Step {
     pub status: StepStatus,
     /// Present for on-chain steps: "seen, waiting for confirmations (1 of 3)".
     pub confirmations: Option<Confirmations>,
-    /// Full txid. The UI middle-truncates it for display and always copies it in full.
+    /// Full txid.
     pub txid: Option<String>,
     pub deadline: Option<Deadline>,
 }
@@ -154,8 +149,8 @@ pub enum StepKind {
     Done,
 }
 
-/// "Never green before it's true" (UX_SPEC §1.3): `Confirmed` means the confirmations
-/// the spec requires (§8), never fewer.
+/// "Never green before it's true" (UX_SPEC §1.3): `Confirmed` means the confirmations the spec
+/// requires (§8), never fewer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
@@ -175,8 +170,8 @@ pub struct Confirmations {
     pub need: u32,
 }
 
-/// Deadlines are block heights (QUALITY_SYSTEM §2.7); `estimated_at` is only for display,
-/// as local time with UTC on hover (UX_SPEC §1.2).
+/// Deadlines are block heights (QUALITY_SYSTEM §2.7); `estimated_at` is only for display, as
+/// local time with UTC on hover (UX_SPEC §1.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Deadline {
@@ -184,8 +179,8 @@ pub struct Deadline {
     pub estimated_at: u64,
 }
 
-/// From `t1` (cancel possible) to `t1 + t2` (punish possible): the app must run at some
-/// point inside this window if something goes wrong.
+/// From `t1` (cancel possible) to `t1 + t2` (punish possible): the app must run at some point
+/// inside this window if something goes wrong.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Window {
@@ -204,12 +199,11 @@ pub enum Outcome {
     Refunded,
     /// The maker failed to refund in time; the user received the BTC as a penalty.
     Punished,
-    /// Ended before any ZEC was requested. Nothing left the user's wallet.
+    /// Ended before any ZEC was requested.
     Aborted,
 }
 
-/// UX_SPEC §3. `ENGINE_OFFLINE` is the UI's own state when it can't reach the engine, so
-/// it isn't here.
+/// UX_SPEC §3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[ts(export)]

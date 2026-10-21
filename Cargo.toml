@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-# Vendored crates keep their upstream lints and formatting (vendor/*/REVIEW.md).
 exclude = ["vendor/dleq", "vendor/pasta_curves"]
 
 [workspace.package]
@@ -11,8 +10,6 @@ rust-version = "1.93"
 license = "MIT OR Apache-2.0"
 publish = false
 
-# Every external crate is pinned exactly, once, here (AGENTS.md NEVER-6, ADR-026).
-# Each pin also needs a row in STACK.md.
 [workspace.dependencies]
 bitcoin = "=0.32.11"
 async-trait = "=0.1.92"
@@ -29,9 +26,6 @@ tokio = { version = "=1.54.0", features = ["macros", "rt-multi-thread"] }
 ts-rs = "=12.0.1"
 zeroize = { version = "=1.9.1", features = ["derive"] }
 
-# Cross-group DLEq (§3.2-R2, ADR-005), plan B: dleq stays on group 0.13, so it gets its Pallas
-# from a vendored pasta_curves 0.5.1 with the zeroize feature backported. vendor/dleq/REVIEW.md.
-# `pasta_curves_dleq` is for dleq.rs only; everything else uses `pasta_curves` 0.6.1.
 dleq = { path = "vendor/dleq", features = ["experimental", "serialize"] }
 flexible-transcript = { version = "=0.3.4", features = ["recommended"] }
 k256 = { version = "=0.13.4", default-features = false, features = ["arithmetic", "bits", "hash2curve"] }
@@ -39,20 +33,17 @@ pasta_curves_dleq = { package = "pasta_curves", path = "vendor/pasta_curves", fe
 rand_core = { version = "=0.6.4", features = ["getrandom"] }
 sha2 = "=0.10.9"
 
-# Zcash pre-release set for NU7 (ADR-007). These move together; bump them as one.
 orchard = "=0.16.0"
 pasta_curves = "=0.6.1"
 pczt = "=0.10.0-pre.2"
 reddsa = "=0.6.1"
 zcash_address = "=0.14.0-pre.2"
 zcash_client_backend = { version = "=0.25.0-pre.2", features = ["pczt", "lightwalletd-tonic-transport", "sync"] }
-# Must match the backend's `transparent-inputs` cfg, which its `pczt` feature turns on.
 zcash_client_sqlite = { version = "=0.23.0-pre.2", features = ["transparent-inputs"] }
 zcash_keys = "=0.17.0-pre.2"
 zcash_primitives = "=0.31.0-pre.2"
 zcash_protocol = { version = "=0.11.0-pre.1", features = ["local-consensus"] }
 
-# AGENTS.md NEVER-7, enforced by the compiler instead of review.
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
@@ -64,7 +55,5 @@ todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
 
-# Crypto in debug builds is 10-50x slower (curve arithmetic, Halo2 proving). Optimize
-# dependencies in dev and test builds; our own crates stay unoptimized for debugging.
 [profile.dev.package."*"]
 opt-level = 2

@@ -1,6 +1,5 @@
-//! Wire messages between taker and maker (PROTOCOL_SPEC §7, INTERFACES §2): JSON over
-//! HTTPS, bytes as lowercase hex. This module knows nothing about transport, so the same
-//! messages can later travel over a relay or a quote board (marketplace seam).
+//! Wire messages between taker and maker (PROTOCOL_SPEC §7, INTERFACES §2): JSON over HTTPS,
+//! bytes as lowercase hex.
 
 use serde::{Deserialize, Serialize};
 use zecsplit_crypto::{MakerSecret, Reveal, SharePub, sign_quote, verify_quote};
@@ -17,8 +16,7 @@ pub enum Network {
     MainBeta,
 }
 
-/// `{ "v": 1, "swap_id": "<hex32>", "type": "<Type>", "body": {...} }`. A `QuoteRequest`
-/// carries an all-zero `swap_id`: Bob picks the real one in his `Quote` (§2).
+/// `{ "v": 1, "swap_id": "<hex32>", "type": "<Type>", "body": {...} }`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Envelope {
     pub v: u16,
@@ -28,14 +26,13 @@ pub struct Envelope {
     pub message: Message,
 }
 
-/// §7 sequence, in order. Status and Error are informational and never trusted.
+/// §7 sequence, in order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "body")]
 pub enum Message {
     QuoteRequest(QuoteRequest),
     Quote(SignedQuote),
     Commit(CommitBody),
-    /// Boxed: about 10x larger than any other variant (three signatures, two keys).
     Reveal(Box<RevealBody>),
     LockTemplate(LockTemplate),
     SetupSigsAlice(SetupSigsAlice),
@@ -59,18 +56,14 @@ pub struct Quote {
     #[serde(with = "hex::serde")]
     pub swap_id: [u8; 32],
     pub network: Network,
-    /// Zatoshis Alice pays into the lock.
     pub zec_amount: u64,
-    /// Sats Alice receives.
     pub btc_amount: u64,
-    /// sat/vB, fixed for every pre-signed transaction.
     pub btc_fee_rate: u64,
     pub t1: u16,
     pub t2: u16,
     pub n_conf_btc: u16,
     pub n_conf_zec: u16,
     pub redeem_margin: u16,
-    /// Unix seconds (about 60 s after issue).
     pub expires_at: u64,
 }
 
@@ -78,7 +71,6 @@ pub struct Quote {
 pub struct SignedQuote {
     #[serde(flatten)]
     pub quote: Quote,
-    /// BIP340 over `H256(HK_quote_v1, canonical_json(quote))` (§2-R2).
     #[serde(with = "hex::serde")]
     pub maker_sig: [u8; 64],
 }
@@ -89,8 +81,7 @@ pub struct CommitBody {
     pub commitment: [u8; 32],
 }
 
-/// §3.2-R1. A newtype so serde can apply the hex field encodings of `RevealDef`; on the
-/// wire the body is the reveal's fields directly.
+/// §3.2-R1.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RevealBody(#[serde(with = "RevealDef")] pub Reveal);
 
@@ -102,8 +93,6 @@ pub struct LockTemplate {
     pub refund_addr: String,
 }
 
-// ponytail: signature fields are opaque bytes until T-022 fixes the ECDSA and adaptor
-// encodings; tighten them to fixed-size arrays then.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupSigsAlice {
     #[serde(with = "hex::serde")]
@@ -198,8 +187,8 @@ pub fn encode(envelope: &Envelope) -> Result<Vec<u8>, WireError> {
     Ok(serde_json::to_vec(envelope)?)
 }
 
-/// §7-R1: the version is checked before anything else is parsed, since a future version
-/// may change every body.
+/// §7-R1: the version is checked before anything else is parsed, since a future version may
+/// change every body.
 pub fn decode(bytes: &[u8]) -> Result<Envelope, WireError> {
     #[derive(Deserialize)]
     struct VersionOnly {
@@ -213,9 +202,7 @@ pub fn decode(bytes: &[u8]) -> Result<Envelope, WireError> {
 }
 
 impl Quote {
-    /// The signed form: compact JSON with keys sorted. The quote holds only integers and
-    /// ASCII strings, so this matches RFC 8785 (JCS), and any maker, in any language, can
-    /// reproduce it.
+    /// The signed form: compact JSON with keys sorted.
     pub fn canonical_json(&self) -> Result<Vec<u8>, QuoteError> {
         let value = serde_json::to_value(self).map_err(|e| QuoteError::Encoding(e.to_string()))?;
         serde_json::to_vec(&value).map_err(|e| QuoteError::Encoding(e.to_string()))
@@ -233,8 +220,8 @@ impl Quote {
 }
 
 impl SignedQuote {
-    /// Taker side (§2-R2): Alice MUST check the signature under her pinned maker key and
-    /// that the quote hasn't expired before going on (T23, ADV-14).
+    /// Taker side (§2-R2): Alice MUST check the signature under her pinned maker key and that
+    /// the quote hasn't expired before going on (T23, ADV-14).
     pub fn verify(&self, pinned_maker_key: &[u8; 32], now_unix: u64) -> Result<&Quote, QuoteError> {
         if self.quote.protocol_version != PROTOCOL_VERSION {
             return Err(QuoteError::UnsupportedVersion(self.quote.protocol_version));
@@ -310,8 +297,7 @@ mod tests {
         assert_eq!(decode(json.as_bytes()).unwrap(), env);
     }
 
-    /// The bytes every maker must sign for this quote. Pinned so no dependency can change
-    /// key order or formatting unnoticed (e.g. serde_json's `preserve_order`).
+    /// The bytes every maker must sign for this quote.
     #[test]
     fn spec_2_r2_canonical_quote_json_is_sorted_and_compact() {
         let json = String::from_utf8(quote().canonical_json().unwrap()).unwrap();
@@ -329,7 +315,6 @@ mod tests {
         let signed = quote().sign(&maker()).unwrap();
         let pinned = maker_public_key(&maker()).unwrap();
         let mut value = serde_json::to_value(&signed).unwrap();
-        // Rebuild the object with keys in reverse order, as another maker implementation might.
         let reversed: serde_json::Map<String, serde_json::Value> = value
             .as_object_mut()
             .unwrap()

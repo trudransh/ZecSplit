@@ -8,8 +8,8 @@ import type { Window } from "./Window";
 import type { Zatoshis } from "./Zatoshis";
 
 /**
- * `GET /api/swaps/{id}` and every event on `GET /api/swaps/{id}/events` (SSE): the whole
- * view model, so the UI can render any screen from one message.
+ * `GET /api/swaps/{id}` and every event on `GET /api/swaps/{id}/events` (SSE): the whole view
+ * model, so the UI can render any screen from one message.
  */
 export type SwapView = { swap_id: string, network: Network, zec_amount: Zatoshis, btc_amount: Sats, btc_address: string, 
 /**
@@ -17,8 +17,7 @@ export type SwapView = { swap_id: string, network: Network, zec_amount: Zatoshis
  */
 steps: Array<Step>, 
 /**
- * The ZIP 321 URI, built by the engine. Present only once both Bitcoin sources have
- * confirmed the maker's lock (§4.2-R2) and until the payment is seen.
+ * The ZIP 321 URI, built by the engine.
  */
 zip321_uri: string | null, 
 /**
@@ -30,6 +29,6 @@ refund_window: Window,
  */
 recovery_saved: boolean, outcome: Outcome | null, 
 /**
- * The latest problem, if any. Copy for each code is in UX_SPEC §3.
+ * The latest problem, if any.
  */
 error: ErrorCode | null, };

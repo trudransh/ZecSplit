@@ -1,9 +1,6 @@
-//! PROTOCOL_SPEC §9 test vectors (T-014): fixed inputs give fixed C_A, C_B, T, σ, ak, nk,
-//! rivk and the regtest lock UA. The expected values live in
-//! `crates/zecsplit-crypto/vectors/v1.json`; changing any byte of any value fails here.
-//! Regenerate on purpose (it is a protocol change) with `ZECSPLIT_WRITE_VECTORS=1`.
+//! PROTOCOL_SPEC §9 test vectors (T-014): fixed inputs give fixed C_A, C_B, T, σ, ak, nk, rivk
+//! and the regtest lock UA.
 
-// Integration-test helpers aren't `#[test]` fns, so clippy's allow-unwrap-in-tests misses them.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::BTreeMap;
@@ -43,7 +40,7 @@ fn btc_key(seed: u8) -> [u8; 33] {
     .serialize()
 }
 
-/// The reveal fields `T` hashes. The proofs are fixed filler: `T` binds bytes, not validity.
+/// The reveal fields `T` hashes.
 fn reveal(share_pub: SharePub, btc_key: [u8; 33], nonce: [u8; 32], addr: &str) -> Reveal {
     Reveal {
         share_pub,

@@ -5,7 +5,6 @@ all-features = true
 version = 2
 yanked = "deny"
 
-# AGENTS.md NEVER-6 allowlist.
 [licenses]
 version = 2
 allow = [
@@ -22,13 +21,10 @@ confidence-threshold = 0.9
 unused-allowed-license = "allow"
 private = { ignore = true }
 
-
 [[licenses.exceptions]]
 crate = "hex_lit"
 allow = ["MITNFA"]
 
-# Zlib (permissive) via the Zcash wallet stack: rusqlite -> hashbrown -> foldhash,
-# and zcash_client_backend -> flume -> nanorand.
 [[licenses.exceptions]]
 crate = "foldhash"
 allow = ["Zlib"]

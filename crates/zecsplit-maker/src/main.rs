@@ -1,3 +1,3 @@
-//! Maker service: signed quotes, limits, Bob runner, ops CLI. INTERFACES §2.
+//! Maker service: signed quotes, limits, Bob runner, ops CLI.
 
 fn main() {}

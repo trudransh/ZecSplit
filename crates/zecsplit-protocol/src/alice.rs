@@ -1,11 +1,4 @@
-//! Alice, the taker (PROTOCOL_SPEC §6.1). She has ZEC and wants BTC.
-//!
-//! The rules this machine exists to enforce, in order of what costs funds:
-//! - the payment request appears only once `tx_lock` is confirmed on both sources (§4.2-R2);
-//! - she never redeems inside the margin (§4.4-R1) and never cancels against her own
-//!   pending redeem;
-//! - she cancels by `t1` (§5.3-R1) and punishes after `t2` if Bob hasn't refunded (§5.3-R4);
-//! - `Aborted` is reachable only before the payment request (§6.1).
+//! Alice, the taker (PROTOCOL_SPEC §6.1).
 
 use crate::machine::{AbortReason, Alert, ChainView, Outcome, Params, SweepStatus, TxStatus};
 use crate::timers::{cancel_valid, may_redeem, needs_cpfp, punish_valid};
@@ -13,61 +6,37 @@ use crate::timers::{cancel_valid, may_redeem, needs_cpfp, punish_valid};
 /// §4.4-R3: CPFP a redeem still unconfirmed after this many blocks.
 const REDEEM_CPFP_AFTER: u32 = 3;
 
-/// §6.1. `BtcLockConfirmed` is folded into `AwaitingZecPayment`: a confirmed lock is
-/// exactly what permits the payment request (ADR-033).
+/// §6.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AliceState {
-    /// Quote verified, keys generated, `C_A` sent (or to be re-sent).
     Quoted,
-    /// `C_B` received, `Reveal_A` sent.
     Committed,
-    /// `Reveal_B` verified. `sigs_sent` once `SetupSigsAlice` went out.
-    Revealed {
-        sigs_sent: bool,
-    },
-    /// Bob's cancel and punish signatures verified. Waiting for `tx_lock`.
+    Revealed { sigs_sent: bool },
     SigsExchanged,
     BtcLockSeen,
-    AwaitingZecPayment {
-        h_lock: u32,
-    },
-    EncSigReceived {
-        h_lock: u32,
-    },
-    RedeemBroadcast {
-        h_lock: u32,
-        at_tip: u32,
-    },
-    CancelBroadcast {
-        h_lock: u32,
-    },
-    Cancelled {
-        h_cancel: u32,
-    },
-    /// Bob's refund confirmed: `s_b` is recoverable (§5.3-R3). Sweeping the ZEC back.
+    AwaitingZecPayment { h_lock: u32 },
+    EncSigReceived { h_lock: u32 },
+    RedeemBroadcast { h_lock: u32, at_tip: u32 },
+    CancelBroadcast { h_lock: u32 },
+    Cancelled { h_cancel: u32 },
     RefundSeen,
     ZecSweepBroadcast,
-    PunishBroadcast {
-        h_cancel: u32,
-    },
+    PunishBroadcast { h_cancel: u32 },
     Done(Outcome),
     Aborted(AbortReason),
 }
 
-/// Everything the shell can tell Alice. Messages arrive already verified.
+/// Everything the shell can tell Alice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AliceInput {
     Begin,
-    /// Engine restart: re-emit this state's (idempotent) duties.
     Resume,
     PeerCommitted,
     PeerRevealVerified,
     LockTemplateVerified,
     PeerSigsVerified,
     EncSigVerified,
-    /// A message failed verification.
     PeerMisbehaved,
-    /// The shell's wall-clock timer: Bob never locked BTC.
     LockTimedOut,
     Chain(ChainView),
 }
@@ -83,7 +52,6 @@ pub enum AliceAction {
     BroadcastRedeem,
     CpfpRedeem,
     BroadcastCancel,
-    /// Recover `s_b` from the refund and sweep the lock notes back (§5.3-R3).
     SweepZec,
     BroadcastPunish,
     Alert(Alert),
@@ -112,7 +80,6 @@ pub fn step_alice(
             if before_payment_request(state) {
                 (S::Aborted(AbortReason::PeerMisbehaved), vec![])
             } else {
-                // Funds may be locked: only the timeouts can end this swap now.
                 (state, vec![A::Alert(Alert::PeerMisbehavedAfterLock)])
             }
         }
@@ -206,8 +173,6 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
                     Some(h_lock) => {
                         let next = S::AwaitingZecPayment { h_lock };
                         let (s, mut acts) = on_chain(next, v, p);
-                        // §4.2-R2: the request appears only now, and only if it can still
-                        // finish safely; otherwise the deadline logic above already took over.
                         if s == next {
                             acts.insert(0, A::ShowPaymentRequest);
                         }
@@ -222,7 +187,6 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
             if let Some(done) = lock_phase_outcome(h_lock, v, p) {
                 return done;
             }
-            // ADV-09: the lock was reorged out. Hide the request and wait again.
             if v.lock.confirmed_height(tip, p.n_conf_btc).is_none() {
                 return (S::BtcLockSeen, vec![A::HidePaymentRequest]);
             }
@@ -233,7 +197,6 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
                 );
             }
             if !may_redeem(tip, h_lock, p.t1, p.redeem_margin) {
-                // Paying now could never be redeemed safely (§5.4).
                 return (
                     state,
                     vec![A::HidePaymentRequest, A::Alert(Alert::MarginTooSmall)],
@@ -255,7 +218,6 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
                     vec![A::BroadcastRedeem],
                 )
             } else if cancel_valid(tip, h_lock, p.t1) {
-                // §5.4: never reveal s_a now; take the refund path.
                 (S::CancelBroadcast { h_lock }, vec![A::BroadcastCancel])
             } else {
                 (state, vec![A::Alert(Alert::MarginTooSmall)])
@@ -266,7 +228,6 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
             if let Some(done) = lock_phase_outcome(h_lock, v, p) {
                 return done;
             }
-            // Never cancel against our own pending redeem: fee-bump it instead.
             match v.redeem {
                 TxStatus::Unseen | TxStatus::SourcesDisagree => (state, vec![A::BroadcastRedeem]),
                 TxStatus::Mempool if needs_cpfp(tip, at_tip, REDEEM_CPFP_AFTER) => (
@@ -320,8 +281,8 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
     }
 }
 
-/// Facts that end the lock phase whatever Alice was doing: her redeem confirmed, or a
-/// cancel (hers or Bob's) is on chain.
+/// Facts that end the lock phase whatever Alice was doing: her redeem confirmed, or a cancel
+/// (hers or Bob's) is on chain.
 fn lock_phase_outcome(
     h_lock: u32,
     v: &ChainView,
@@ -346,7 +307,6 @@ mod tests {
     use AliceInput as I;
     use AliceState as S;
 
-    // regtest (§8): t1 = t2 = 20, margin 5. n_conf_btc = 2 so "seen" and "confirmed" differ.
     const P: Params = Params {
         t1: 20,
         t2: 20,
@@ -416,7 +376,6 @@ mod tests {
 
     #[test]
     fn spec_4_2_r2_no_payment_request_before_two_sources_confirm() {
-        // One confirmation of the two required.
         assert_eq!(
             chain(S::BtcLockSeen, view(H_LOCK)),
             (S::BtcLockSeen, vec![])
@@ -442,13 +401,11 @@ mod tests {
     #[test]
     fn spec_4_4_r1_refuses_redeem_inside_margin_adv_06() {
         let s = S::EncSigReceived { h_lock: H_LOCK };
-        // h_lock + t1 = 120: redeem allowed up to tip 114.
         assert_eq!(chain(s, view(114)).1, [A::BroadcastRedeem]);
         assert_eq!(
             chain(s, view(115)),
             (s, vec![A::Alert(Alert::MarginTooSmall)])
         );
-        // §5.4: inside the margin she waits for t1, then cancels; s_a is never revealed.
         assert_eq!(
             chain(s, view(119)),
             (
@@ -503,13 +460,11 @@ mod tests {
         assert_eq!(chain(s, v), (s, vec![]));
         let (s2, acts) = chain(s, view(113).with_redeem(TxStatus::Mempool));
         assert_eq!(acts, [A::CpfpRedeem]);
-        // Past t1 with the redeem pending: still no cancel from Alice.
         let (_, acts) = chain(s2, view(125).with_redeem(TxStatus::Mempool));
         assert!(!acts.contains(&A::BroadcastCancel));
     }
 
-    /// §6.3-R2 / S-07: back online after Bob cancelled and refunded. One step takes Alice
-    /// all the way to sweeping her ZEC back.
+    /// §6.3-R2 / S-07: back online after Bob cancelled and refunded.
     #[test]
     fn spec_6_3_r2_offline_catch_up_jumps_to_the_sweep() {
         let mut v = view(150);

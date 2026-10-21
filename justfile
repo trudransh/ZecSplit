@@ -1,6 +1,3 @@
-# Targets follow private/docs/architecture/ARCHITECTURE.md §7. e2e, adv, priv, demo
-# and status arrive with the tickets that build them.
-
 # Once per clone: turn on the commit hooks.
 setup:
     git config core.hooksPath .githooks
@@ -14,7 +11,6 @@ check:
     cargo deny check
     scripts/secret-scan.sh
 
-# Start the regtest stack (fresh chains), then fund both wallets.
 # 101 BTC blocks so the bitcoind wallet has a mature coinbase.
 devnet-up:
     docker compose -f devnet/docker-compose.yml up -d
