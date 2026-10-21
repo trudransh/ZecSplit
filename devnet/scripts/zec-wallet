@@ -35,6 +35,8 @@ setup)
     # Zebra's light server rejects height 0 (it reads as "no height"), and the wallet
     # fetches the tree state at birthday - 1, so pin the birthday at 2.
     "$dir/mine-zec" 2 >/dev/null
+    # A restarted container keeps the wallet of the previous (discarded) chain.
+    docker compose -f "$dir/../docker-compose.yml" exec -T zec-wallet sh -c 'rm -rf /wallet/* /wallet/.[!.]*'
     "${wallet[@]}" init --name devnet --birthday 2 -i /wallet/identity.txt -n regtest \
         --activation-heights /activation-heights.toml "${server[@]}" </dev/null >/dev/null
     # The coinbase pays the Orchard receiver, so it lands as an Ironwood note (NU6.3+).
