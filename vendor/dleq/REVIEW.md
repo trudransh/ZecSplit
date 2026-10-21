@@ -12,7 +12,9 @@ T-015, PROTOCOL_SPEC §3.2-R2, ADR-005, THREAT_MODEL T22.
 
 ## Changes versus upstream
 
-**None.** Every file except this `REVIEW.md` is byte-identical to the published crate. To check:
+**No code changes.** Every file except this `REVIEW.md` is byte-identical to the published
+crate. I checked this by running `diff -r` against the registry copy, whose `.crate` has the
+checksum above. To repeat the check:
 
 ```sh
 cargo fetch   # in any project that depends on dleq =0.4.1
@@ -52,7 +54,9 @@ cross to pasta 0.6 / orchard only as canonical 32-byte encodings (same curve, sa
 - Features `experimental` (the `cross_group` module) and `serialize` (proof bytes). The default
   `secure_capacity_difference` stays on. The capacities are 254 (Pallas `F_q`) and 255
   (secp256k1), so the shared capacity is 254 bits.
-- `G0` = Pallas from pasta 0.5.1, `G1` = secp256k1 from `k256` 0.13.4.
+- `G0` = Pallas from the vendored pasta 0.5.1, which the workspace names `pasta_curves_dleq`
+  (`pasta_curves` stays 0.6.1, the only pasta that orchard and §3.3 use). `G1` = secp256k1 from
+  `k256` 0.13.4.
 - Variant `CompromiseLinearDLEq`, which upstream recommends. Proof size: 49,151 bytes. Verify
   takes about 0.2 s in a release build.
 - Generators: primary `SpendAuthG` = `hash_to_curve("z.cash:Orchard")(b"G")` (a test pins it to
@@ -63,8 +67,8 @@ cross to pasta 0.6 / orchard only as canonical 32-byte encodings (same curve, sa
   proofs over it verify. This resolves the T-015 unknown in CODE_FINDINGS §6.
 - Transcript: `RecommendedTranscript::new(b"HK_dleq_v1")`, then `append_message(b"swap_id", ..)`
   and `append_message(b"role_byte", [role])`.
-- The scalar comes from `prove`'s digest path (SHA-512 over 32 fresh RNG bytes, truncated to 254
-  bits).
+- The scalar comes from `prove`'s digest path: SHA-512 over 32 fresh RNG bytes, truncated to
+  254 bits. That is the share range `[1, 2^254)` of §1 (ADR-028).
 
 ## Upstream tests
 
@@ -78,6 +82,7 @@ in a scratch copy with those two restored from `Cargo.toml.orig` (`dalek-ff-grou
 1. Confirm that nothing changed (`diff` above).
 2. The choices in `dleq.rs`: the variant, the transcript layout, and the alternate-generator
    domains and messages. These are wire-level constants, and the spec doesn't fix them yet.
-3. PROTOCOL_SPEC §1 says shares lie in `[1, 2^252)`. `dleq` produces `[0, 2^254)`, because 254
-   bits is the Pallas/secp256k1 shared capacity; 2^252 is the ed25519 figure from the Monero
-   original.
+3. The proof bounds a peer's share below 2^254, the shared capacity, and no verifier can
+   check anything tighter. That is why §1 uses `[1, 2^254)` (ADR-028). Under the old 2^252
+   bound, a peer could pass `verify` with `s` in `[2^252, 2^254)` and then make the honest
+   party's claim fail.
