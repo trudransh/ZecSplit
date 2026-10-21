@@ -1,0 +1,2 @@
+# Vendored crates stay byte-identical to upstream plus their REVIEW.md changes: never reformat them.
+disable_all_formatting = true
