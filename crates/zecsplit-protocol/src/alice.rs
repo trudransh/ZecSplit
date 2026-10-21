@@ -365,6 +365,7 @@ mod tests {
             refund: TxStatus::Unseen,
             punish: TxStatus::Unseen,
             zec_sweep: SweepStatus::Pending,
+            zec_lock: crate::machine::ZecLock::Unseen,
         }
     }
 
@@ -567,16 +568,5 @@ mod tests {
                 .1
                 .is_empty()
         );
-    }
-
-    impl ChainView {
-        fn with_lock(mut self, s: TxStatus) -> Self {
-            self.lock = s;
-            self
-        }
-        fn with_redeem(mut self, s: TxStatus) -> Self {
-            self.redeem = s;
-            self
-        }
     }
 }
