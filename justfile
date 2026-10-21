@@ -10,6 +10,7 @@ check:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo test --workspace --locked
+    @git diff --quiet -- packages/engine-api && test -z "$(git ls-files --others --exclude-standard packages/engine-api)" || { echo "packages/engine-api is stale: commit the TS bindings cargo test regenerated (ADR-023)" >&2; exit 1; }
     cargo deny check
     scripts/secret-scan.sh
 
