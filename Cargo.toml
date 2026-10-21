@@ -13,6 +13,9 @@ publish = false
 # Each pin also needs a row in STACK.md.
 [workspace.dependencies]
 bitcoin = "=0.32.11"
+blake2b_simd = "=1.0.5"
+proptest = "=1.12.0"
+thiserror = "=2.0.21"
 zeroize = { version = "=1.9.1", features = ["derive"] }
 
 # Zcash pre-release set for NU7 (ADR-007). These move together; bump them as one.

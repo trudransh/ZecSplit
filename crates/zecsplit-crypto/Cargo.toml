@@ -10,4 +10,11 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+blake2b_simd.workspace = true
+pasta_curves = { workspace = true, features = ["zeroize"] }
+thiserror.workspace = true
 zeroize.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+reddsa.workspace = true
