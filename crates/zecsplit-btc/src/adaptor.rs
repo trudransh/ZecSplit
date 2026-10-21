@@ -1,5 +1,5 @@
 //! ECDSA adaptor signatures (PROTOCOL_SPEC §3.5, §4.5-R1, §5.3-R3), wrapping `ecdsa_fun` so
-//! callers only see `secp256k1` types. `msg` is always a BIP143 sighash.
+//! callers only see `secp256k1` types.
 
 use bitcoin::secp256k1::{PublicKey, SecretKey, ecdsa::Signature};
 use ecdsa_fun::adaptor::{Adaptor, HashTranscript};
@@ -9,10 +9,9 @@ use sha2::Sha256;
 
 pub use ecdsa_fun::adaptor::EncryptedSignature as EncSig;
 
-// Deterministic nonces: the same key, adaptor point and sighash always give the same `EncSig`,
-// so test vectors (T-014) are reproducible and signing needs no RNG.
 type Engine = Adaptor<HashTranscript<Sha256, ChaCha20Rng>, nonce::Deterministic<Sha256>>;
 
+/// §3.5-R2: encrypts an ECDSA signature on `msg` under the adaptor point `y`.
 pub fn enc_sign(sk: &SecretKey, y: &PublicKey, msg: &[u8; 32]) -> EncSig {
     Engine::default().encrypted_sign(&Scalar::from(*sk), &Point::from(*y), msg)
 }
@@ -22,8 +21,7 @@ pub fn verify_enc(pk: &PublicKey, y: &PublicKey, msg: &[u8; 32], es: &EncSig) ->
     Engine::default().verify_encrypted_signature(&Point::from(*pk), &Point::from(*y), msg, es)
 }
 
-/// Decrypts `es` with the adaptor secret. The result is always low-S, so it is standard on
-/// Bitcoin. Publishing it reveals `y_secret` to whoever holds `es`.
+/// Decrypts `es` with the adaptor secret.
 pub fn decrypt(y_secret: &SecretKey, es: &EncSig) -> Signature {
     Engine::default()
         .decrypt_signature(&Scalar::from(*y_secret), es.clone())
@@ -31,7 +29,7 @@ pub fn decrypt(y_secret: &SecretKey, es: &EncSig) -> Signature {
 }
 
 /// §4.5-R1, §5.3-R3: recovers the adaptor secret for `y` from the signature published in a
-/// witness. `None` if `sig` is not the decryption of `es`.
+/// witness.
 pub fn recover(y: &PublicKey, sig: &Signature, es: &EncSig) -> Option<SecretKey> {
     Engine::default()
         .recover_decryption_key(&Point::from(*y), &(*sig).into(), es)

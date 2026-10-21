@@ -4,7 +4,6 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-# ADR-021: unmaintained notice, not a vulnerability. ecdsa_fun's adaptor feature pins bincode 2.
 ignore = [{ id = "RUSTSEC-2025-0141", reason = "bincode via ecdsa_fun adaptor; ADR-021" }]
 
 [licenses]
