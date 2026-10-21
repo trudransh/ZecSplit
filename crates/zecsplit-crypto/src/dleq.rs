@@ -214,6 +214,31 @@ mod tests {
         assert!(secret.secp()[0] < 0x40);
     }
 
+    /// T-015 meets T-010: two real DLEq shares combine into a valid lock key (§3.3-R1).
+    #[test]
+    fn spec_3_3_r1_dleq_shares_combine_into_ak() {
+        let (secret_a, p_a, s_a, _) = &*A;
+        let (secret_b, p_b, s_b, _) = &*B;
+        let key = crate::shared_ak(
+            &crate::SharePub {
+                pallas: *p_a,
+                secp: *s_a,
+            },
+            &crate::SharePub {
+                pallas: *p_b,
+                secp: *s_b,
+            },
+        )
+        .unwrap();
+        let ask = crate::shared_ask(
+            &crate::Share::from_bytes(*secret_a.pallas()),
+            &crate::Share::from_bytes(*secret_b.pallas()),
+            key.sigma,
+        )
+        .unwrap();
+        assert_eq!(reddsa_ak(ask.expose_secret()), key.ak);
+    }
+
     #[test]
     fn spec_3_2_r3_2_rejects_tampered_proof() {
         let (_, p, s, proof) = &*A;
