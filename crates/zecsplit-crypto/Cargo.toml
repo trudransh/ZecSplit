@@ -16,7 +16,7 @@ flexible-transcript.workspace = true
 getrandom.workspace = true
 k256.workspace = true
 pasta_curves = { workspace = true, features = ["zeroize"] }
-pasta_curves_05.workspace = true
+pasta_curves_dleq.workspace = true
 rand_core.workspace = true
 reddsa.workspace = true
 secp256k1.workspace = true
