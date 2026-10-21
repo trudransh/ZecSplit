@@ -4,6 +4,7 @@
 pub(crate) const HK_COMMIT_V1: &[u8; 16] = b"HK_commit_v1\0\0\0\0";
 pub(crate) const HK_NK_V1: &[u8; 16] = b"HK_nk_v1\0\0\0\0\0\0\0\0";
 pub(crate) const HK_POK_V1: &[u8; 16] = b"HK_pok_v1\0\0\0\0\0\0\0";
+pub(crate) const HK_QUOTE_V1: &[u8; 16] = b"HK_quote_v1\0\0\0\0\0";
 pub(crate) const HK_RIVK_V1: &[u8; 16] = b"HK_rivk_v1\0\0\0\0\0\0";
 
 /// `H256(tag, m)`.

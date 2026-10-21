@@ -59,6 +59,11 @@ secret_type!(
     BtcSecret
 );
 
+secret_type!(
+    /// The maker's long-term BIP340 identity key (§2-R1). It signs every quote.
+    MakerSecret
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
