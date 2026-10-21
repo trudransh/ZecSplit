@@ -6,8 +6,10 @@ body="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"generate\",\"params\":[${1:?usa
 
 # Right after start Zebra answers "state is empty" (HTTP 200) until genesis is committed.
 for _ in $(seq 30); do
-    out="$(curl -sS --retry 30 --retry-connrefused --retry-delay 1 \
-        -H 'content-type: application/json' --data "$body" http://127.0.0.1:18232)"
+    # Right after `up`, Docker's port proxy accepts and then resets connections until
+    # Zebra listens (curl exit 56), so treat any curl failure as "not ready yet".
+    out="$(curl -sS --max-time 5 -H 'content-type: application/json' \
+        --data "$body" http://127.0.0.1:18232 2>&1 || true)"
     if [[ "$out" == *'"result"'* ]]; then
         echo "$out"
         exit 0
