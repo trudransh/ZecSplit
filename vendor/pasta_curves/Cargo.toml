@@ -102,6 +102,11 @@ version = "1.1.0"
 version = "2.3"
 default-features = false
 
+[dependencies.zeroize]
+version = "1"
+optional = true
+default-features = false
+
 [dev-dependencies.bincode]
 version = "1.3"
 
@@ -141,3 +146,4 @@ sqrt-table = [
     "lazy_static",
 ]
 uninline-portable = []
+zeroize = ["dep:zeroize"]
