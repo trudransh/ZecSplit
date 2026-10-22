@@ -190,6 +190,12 @@ dependencies = [
 
 [[package]]
 name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
+name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -295,6 +301,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ca0f87890d2398219d15182cb6af9681722bd891758dab4ca01896e2038a510"
 dependencies = [
  "base58ck",
+ "base64 0.21.7",
  "bech32",
  "bitcoin-io",
  "bitcoin-units",
@@ -4720,6 +4727,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "ecdsa_fun",
+ "hex",
  "rand_chacha 0.3.1",
  "reqwest",
  "serde",
@@ -4762,7 +4770,9 @@ name = "zecsplit-protocol"
 version = "0.0.0"
 dependencies = [
  "age",
+ "bitcoin",
  "hex",
+ "reddsa",
  "serde",
  "serde_json",
  "tempfile",
