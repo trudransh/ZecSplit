@@ -14,6 +14,7 @@ zecsplit-crypto = { path = "../zecsplit-crypto" }
 async-trait.workspace = true
 bitcoin.workspace = true
 ecdsa_fun.workspace = true
+hex.workspace = true
 rand_chacha.workspace = true
 reqwest.workspace = true
 serde.workspace = true

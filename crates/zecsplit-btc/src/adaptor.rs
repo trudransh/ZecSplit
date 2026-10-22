@@ -36,6 +36,19 @@ pub fn recover(y: &PublicKey, sig: &Signature, es: &EncSig) -> Option<SecretKey>
         .map(SecretKey::from)
 }
 
+/// The 162-byte wire form of an adaptor signature (INTERFACES §2).
+pub fn encsig_to_bytes(es: &EncSig) -> Vec<u8> {
+    hex::decode(es.to_string()).unwrap_or_default()
+}
+
+/// Parses the 162-byte wire form; `None` if malformed.
+pub fn encsig_from_bytes(bytes: &[u8]) -> Option<EncSig> {
+    if bytes.len() != 162 {
+        return None;
+    }
+    hex::encode(bytes).parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +131,20 @@ mod tests {
         let sig = decrypt(&y_secret, &es);
 
         assert_eq!(recover(&key("wrong").public_key(&secp), &sig, &es), None);
+    }
+
+    #[test]
+    fn encsig_bytes_round_trip_and_reject_garbage() {
+        let es = enc_sign(
+            &key("sk"),
+            &key("y").public_key(&Secp256k1::new()),
+            &msg("m"),
+        );
+        let bytes = encsig_to_bytes(&es);
+        assert_eq!(bytes.len(), 162);
+        assert_eq!(encsig_from_bytes(&bytes), Some(es));
+        assert_eq!(encsig_from_bytes(&bytes[..161]), None);
+        assert_eq!(encsig_from_bytes(&[0xff; 162]), None);
     }
 
     #[test]
