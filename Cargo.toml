@@ -28,6 +28,7 @@ tempfile = "=3.27.0"
 tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread"] }
 ts-rs = "=12.0.1"
 zeroize = { version = "=1.9.1", features = ["derive"] }
+age = { version = "=0.12.1", default-features = false }
 
 dleq = { path = "vendor/dleq", features = ["experimental", "serialize"] }
 flexible-transcript = { version = "=0.3.4", features = ["recommended"] }

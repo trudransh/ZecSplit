@@ -4,7 +4,10 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = [{ id = "RUSTSEC-2025-0141", reason = "bincode via ecdsa_fun adaptor; ADR-035" }]
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "bincode via ecdsa_fun adaptor; ADR-035" },
+    { id = "RUSTSEC-2026-0374", reason = "basic-toml, build-time only, via age i18n proc-macros; ADR-037" },
+]
 
 [licenses]
 version = 2
