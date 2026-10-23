@@ -118,7 +118,7 @@ fn spec_4_happy_path_redeem_reveals_s_a_and_bob_gets_ask() {
     let redeem = alice.signed_redeem().unwrap();
 
     let txs = alice.templates().unwrap();
-    let v_lock = txs.lock.unsigned_tx.output[0].value;
+    let v_lock = txs.v_lock;
     let k_a = alice.core.own_btc_pk().unwrap();
     let k_b = bob.core.own_btc_pk().unwrap();
     assert!(spends_verify(&redeem, &txs.w_script, v_lock, [&k_a, &k_b]));
@@ -140,7 +140,7 @@ fn spec_5_3_refund_reveals_s_b_and_alice_gets_ask() {
     let txs = bob.templates().unwrap();
     let k_a = alice.core.own_btc_pk().unwrap();
     let k_b = bob.core.own_btc_pk().unwrap();
-    let v_lock = txs.lock.unsigned_tx.output[0].value;
+    let v_lock = txs.v_lock;
     assert!(spends_verify(
         &cancel_a,
         &txs.w_script,

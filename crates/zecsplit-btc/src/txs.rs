@@ -24,6 +24,7 @@ pub struct BtcParams {
 #[derive(Debug, Clone)]
 pub struct SwapTxs {
     pub w_script: ScriptBuf,
+    pub v_lock: Amount,
     pub lock: Psbt,
     pub redeem: Transaction,
     pub cancel: Transaction,
@@ -172,6 +173,7 @@ pub fn build_txs(p: &BtcParams, lock: Psbt) -> Result<SwapTxs, TxError> {
 
     Ok(SwapTxs {
         w_script: w,
+        v_lock,
         lock,
         redeem,
         cancel,
