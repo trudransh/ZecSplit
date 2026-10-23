@@ -22,6 +22,8 @@ zeroize.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+getrandom.workspace = true
+tokio.workspace = true
 reddsa.workspace = true
 tempfile.workspace = true
 zecsplit-store = { path = "../zecsplit-store" }
