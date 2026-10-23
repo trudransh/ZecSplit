@@ -235,3 +235,74 @@ fn spec_3_5_r1_lock_template_with_wrong_value_is_rejected() {
         Err(SessionError::Template(_))
     ));
 }
+
+#[test]
+fn spec_6_3_r2_restored_sessions_finish_the_swap_identically() {
+    let (mut alice, mut bob, shared) = setup();
+    let esig = bob.encsig().unwrap();
+    alice.on_encsig(&esig).unwrap();
+
+    let alice2 = AliceSession::restore(alice.save("http://maker").unwrap()).unwrap();
+    let bob2 = BobSession::restore(bob.save("").unwrap()).unwrap();
+
+    let redeem = alice.signed_redeem().unwrap();
+    assert_eq!(
+        alice2.signed_redeem().unwrap(),
+        redeem,
+        "deterministic replay"
+    );
+    assert!(ask_matches(
+        &bob2.ask_from_redeem(&redeem).unwrap(),
+        &shared
+    ));
+    assert_eq!(bob2.signed_refund().unwrap(), bob.signed_refund().unwrap());
+    assert_eq!(
+        alice2.signed_punish().unwrap(),
+        alice.signed_punish().unwrap()
+    );
+    let refund = bob2.signed_refund().unwrap();
+    assert!(ask_matches(
+        &alice2.ask_from_refund(&refund).unwrap(),
+        &shared
+    ));
+}
+
+#[test]
+fn spec_6_4_r1_alice_save_holds_every_required_blob() {
+    let (alice, _, _) = setup();
+    let bundle = alice.save("http://maker").unwrap();
+    for name in crate::recovery::ALICE_REQUIRED {
+        assert!(bundle.blob(name).is_some(), "{name}");
+    }
+    assert_eq!(bundle.maker_endpoint, "http://maker");
+}
+
+#[test]
+fn restored_session_re_sends_the_same_reveal() {
+    let (alice, _, _) = setup();
+    let before = alice.save("").unwrap();
+    let own = before.blob("own_reveal").unwrap().to_vec();
+    let mut alice2 = AliceSession::restore(before).unwrap();
+    let again = serde_json::to_vec(&alice2.core.reveal_msg().unwrap()).unwrap();
+    assert_eq!(again, own);
+}
+
+#[test]
+fn bundle_with_someone_elses_share_is_rejected() {
+    let (alice, _, _) = setup();
+    let mut bundle = alice.save("").unwrap();
+    bundle.share = zecsplit_crypto::Share::from_bytes([1; 32]);
+    assert!(matches!(
+        AliceSession::restore(bundle),
+        Err(SessionError::Key(_))
+    ));
+}
+
+#[test]
+fn saving_before_the_reveals_is_refused() {
+    let core = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
+    assert!(matches!(
+        AliceSession::new(core).save(""),
+        Err(SessionError::OutOfOrder(_))
+    ));
+}

@@ -2,6 +2,7 @@
 
 pub mod alice;
 pub mod bob;
+mod persist;
 
 use std::str::FromStr;
 
@@ -12,7 +13,7 @@ use zecsplit_btc::sign::{sig_in_witness, sighash};
 use zecsplit_btc::txs::{BtcParams, SwapTxs};
 use zecsplit_crypto::rand_core::{CryptoRng, RngCore};
 use zecsplit_crypto::{
-    Ask, Commitment, KeyMaterial, Reveal, RevealError, Role, Share, SharePub, Sigma,
+    Ask, BtcSecret, Commitment, KeyMaterial, Reveal, RevealError, Role, Share, SharePub, Sigma,
     TranscriptInput, check_share_matches, derive_nk_rivk, generate, quote_digest, shared_ak,
     shared_ask, transcript, verify_reveal,
 };
@@ -48,17 +49,42 @@ pub struct Shared {
     pub rivk: [u8; 32],
 }
 
+/// This party's secrets: fresh (can still reveal) or restored from a saved session.
+enum Keys {
+    Fresh(Box<KeyMaterial>),
+    Restored { share: Share, btc_secret: BtcSecret },
+}
+
+impl Keys {
+    fn share(&self) -> &Share {
+        match self {
+            Keys::Fresh(k) => &k.share,
+            Keys::Restored { share, .. } => share,
+        }
+    }
+
+    fn btc_secret(&self) -> &BtcSecret {
+        match self {
+            Keys::Fresh(k) => &k.btc_secret,
+            Keys::Restored { btc_secret, .. } => btc_secret,
+        }
+    }
+}
+
 /// Commit-reveal and key state common to Alice and Bob.
 pub struct Core {
     pub quote: Quote,
     pub role: Role,
-    keys: KeyMaterial,
+    keys: Keys,
+    share_pub: SharePub,
+    btc_key: [u8; 33],
     payout_addr: String,
     commitment: Commitment,
     peer_commitment: Option<Commitment>,
     own_reveal: Option<Reveal>,
     peer: Option<Reveal>,
     shared: Option<Shared>,
+    log: Vec<(&'static str, Vec<u8>)>,
 }
 
 fn crypto_network(n: Network) -> zecsplit_crypto::Network {
@@ -162,13 +188,16 @@ impl Core {
         Ok(Core {
             quote,
             role,
-            keys,
+            share_pub: keys.share_pub,
+            btc_key: keys.btc_key,
+            keys: Keys::Fresh(Box::new(keys)),
             payout_addr,
             commitment,
             peer_commitment: None,
             own_reveal: None,
             peer: None,
             shared: None,
+            log: Vec::new(),
         })
     }
 
@@ -200,17 +229,24 @@ impl Core {
     pub fn on_commit(&mut self, body: &CommitBody) -> Result<(), SessionError> {
         match self.peer_commitment {
             Some(c) if c.0 != body.commitment => Err(SessionError::OutOfOrder("second commit")),
-            _ => {
+            Some(_) => Ok(()),
+            None => {
                 self.peer_commitment = Some(Commitment(body.commitment));
-                Ok(())
+                self.record("peer_commit", body)
             }
         }
     }
 
     /// §3.2-R1: this party's reveal, only after both commitments are known.
     pub fn reveal_msg(&mut self) -> Result<RevealBody, SessionError> {
+        if let Some(own) = &self.own_reveal {
+            return Ok(RevealBody(own.clone()));
+        }
         let (c_a, c_b) = self.ordered()?;
-        let reveal = self.keys.reveal(
+        let Keys::Fresh(keys) = &self.keys else {
+            return Err(SessionError::OutOfOrder("restored session cannot reveal"));
+        };
+        let reveal = keys.reveal(
             &self.quote.swap_id,
             self.role,
             &c_a,
@@ -236,7 +272,7 @@ impl Core {
             &body.0,
             &c_a,
             &c_b,
-            &self.keys.share_pub,
+            &self.share_pub,
         )?;
         let (reveal_a, reveal_b) = match self.role {
             Role::Alice => (own, &body.0),
@@ -271,7 +307,19 @@ impl Core {
         };
         self.peer = Some(body.0.clone());
         self.shared = Some(shared);
+        self.record("peer_reveal", body)?;
         Ok(shared)
+    }
+
+    /// Appends an input to the replay log a saved session is rebuilt from.
+    fn record<T: serde::Serialize>(
+        &mut self,
+        name: &'static str,
+        msg: &T,
+    ) -> Result<(), SessionError> {
+        let bytes = serde_json::to_vec(msg).map_err(|e| SessionError::Key(e.to_string()))?;
+        self.log.push((name, bytes));
+        Ok(())
     }
 
     fn peer(&self) -> Result<&Reveal, SessionError> {
@@ -281,12 +329,12 @@ impl Core {
     }
 
     fn own_btc_sk(&self) -> Result<SecretKey, SessionError> {
-        SecretKey::from_slice(self.keys.btc_secret.expose_secret())
+        SecretKey::from_slice(self.keys.btc_secret().expose_secret())
             .map_err(|_| SessionError::Key("own BTC key".into()))
     }
 
     fn own_btc_pk(&self) -> Result<PublicKey, SessionError> {
-        pubkey(&self.keys.btc_key)
+        pubkey(&self.btc_key)
     }
 
     fn peer_btc_pk(&self) -> Result<PublicKey, SessionError> {
@@ -294,11 +342,11 @@ impl Core {
     }
 
     fn own_share_secp(&self) -> Result<SecretKey, SessionError> {
-        share_secp(&self.keys.share)
+        share_secp(self.keys.share())
     }
 
     fn own_y(&self) -> Result<PublicKey, SessionError> {
-        pubkey(&self.keys.share_pub.secp)
+        pubkey(&self.share_pub.secp)
     }
 
     fn peer_y(&self) -> Result<PublicKey, SessionError> {
@@ -338,8 +386,8 @@ impl Core {
             .ok_or(SessionError::OutOfOrder("no shared key"))?
             .sigma;
         let (a, b) = match self.role {
-            Role::Alice => (&self.keys.share, peer_share),
-            Role::Bob => (peer_share, &self.keys.share),
+            Role::Alice => (self.keys.share(), peer_share),
+            Role::Bob => (peer_share, self.keys.share()),
         };
         shared_ask(a, b, sigma).map_err(|e| SessionError::Key(e.to_string()))
     }
