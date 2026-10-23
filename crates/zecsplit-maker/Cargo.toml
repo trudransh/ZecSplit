@@ -10,4 +10,18 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+zecsplit-btc = { path = "../zecsplit-btc" }
+zecsplit-crypto = { path = "../zecsplit-crypto" }
 zecsplit-protocol = { path = "../zecsplit-protocol" }
+zecsplit-store = { path = "../zecsplit-store" }
+async-trait.workspace = true
+bitcoin.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+zecsplitd = { path = "../zecsplitd" }
+reddsa.workspace = true
+tempfile.workspace = true
+tokio.workspace = true

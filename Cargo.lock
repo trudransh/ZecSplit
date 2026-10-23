@@ -4762,7 +4762,19 @@ dependencies = [
 name = "zecsplit-maker"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
+ "bitcoin",
+ "reddsa",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "zecsplit-btc",
+ "zecsplit-crypto",
  "zecsplit-protocol",
+ "zecsplit-store",
+ "zecsplitd",
 ]
 
 [[package]]
