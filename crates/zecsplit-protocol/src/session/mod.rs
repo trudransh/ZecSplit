@@ -328,6 +328,11 @@ impl Core {
             .ok_or(SessionError::OutOfOrder("no peer reveal"))
     }
 
+    /// The derived Zcash setup, once both reveals are in.
+    pub fn shared_key(&self) -> Option<Shared> {
+        self.shared
+    }
+
     fn own_btc_sk(&self) -> Result<SecretKey, SessionError> {
         SecretKey::from_slice(self.keys.btc_secret().expose_secret())
             .map_err(|_| SessionError::Key("own BTC key".into()))

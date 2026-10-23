@@ -65,17 +65,26 @@ impl AliceSession {
         }
         let txs = build_txs(&params, psbt).map_err(|e| SessionError::Template(e.to_string()))?;
         let d = digests(&txs)?;
-        let sk = self.core.own_btc_sk()?;
-        let sig_cancel = sign(&sk, &d.cancel);
-        let esig = enc_sign(&sk, &self.core.peer_y()?, &d.refund);
-        let msg = SetupSigsAlice {
-            sig_cancel: sig_cancel.serialize_compact().to_vec(),
-            esig_refund: encsig_to_bytes(&esig),
-        };
+        let esig = enc_sign(&self.core.own_btc_sk()?, &self.core.peer_y()?, &d.refund);
         self.esig_a_refund = Some(esig);
         self.txs = Some((txs, d));
         self.core.record("lock_template", tpl)?;
-        Ok(msg)
+        self.setup_sigs()
+    }
+
+    /// §3.5-R2: Alice's setup signatures, re-derivable at any time (deterministic nonces).
+    pub fn setup_sigs(&self) -> Result<SetupSigsAlice, SessionError> {
+        let (_, d) = self.txs()?;
+        let esig = self
+            .esig_a_refund
+            .as_ref()
+            .ok_or(SessionError::OutOfOrder("no esig_A"))?;
+        Ok(SetupSigsAlice {
+            sig_cancel: sign(&self.core.own_btc_sk()?, &d.cancel)
+                .serialize_compact()
+                .to_vec(),
+            esig_refund: encsig_to_bytes(esig),
+        })
     }
 
     /// §3.5-R3, §3.5-R4: verifies Bob's cancel and punish signatures.
@@ -191,6 +200,14 @@ impl AliceSession {
 }
 
 impl AliceSession {
+    /// §6.4-R1: whether every blob the recovery file needs is held.
+    pub fn is_complete(&self) -> bool {
+        self.txs.is_some()
+            && self.esig_a_refund.is_some()
+            && self.sig_b_cancel.is_some()
+            && self.sig_b_punish.is_some()
+    }
+
     /// §6.4-R1: the recovery bundle, with the templates and Bob's signatures the spec requires.
     pub fn save(&self, maker_endpoint: &str) -> Result<RecoveryBundle, SessionError> {
         let mut extra = Vec::new();
