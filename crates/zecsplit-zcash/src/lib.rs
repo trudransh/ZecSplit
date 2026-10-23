@@ -2,10 +2,12 @@
 
 mod lock;
 mod sweep;
+mod wallets;
 mod watch;
 
 pub use lock::{LockKeyError, LockKeys, lock_keys, regtest};
 pub use sweep::{SweepError, sweep};
+pub use wallets::{LockKey, LockWallets};
 pub use watch::{LockStatus, WatchError, lock_status};
 
 #[cfg(test)]

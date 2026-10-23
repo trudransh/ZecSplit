@@ -151,7 +151,7 @@ impl ZecSweep for FakeZec {
         *self.0.lock().unwrap() = Some((signs_for(ask, shared), 0));
         Ok("zec-sweep".into())
     }
-    async fn confirmations(&self, _: &str) -> Result<Option<u32>, String> {
+    async fn confirmations(&self, _: &Shared, _: &str) -> Result<Option<u32>, String> {
         Ok(self.0.lock().unwrap().as_ref().map(|(_, c)| *c))
     }
 }

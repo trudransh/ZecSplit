@@ -45,7 +45,7 @@ pub trait ZecSweep: Send + Sync {
     /// Sweeps every lock note with `ask`; returns the txid.
     async fn sweep(&self, shared: &Shared, ask: &Ask) -> Result<String, String>;
     /// Confirmations of a sweep, `None` while unmined.
-    async fn confirmations(&self, txid: &str) -> Result<Option<u32>, String>;
+    async fn confirmations(&self, shared: &Shared, txid: &str) -> Result<Option<u32>, String>;
 }
 
 /// Everything the runner talks to.
@@ -417,10 +417,11 @@ impl AliceRunner {
             .txs(&self.swap_id)?
             .into_iter()
             .find(|t| t.name == ZEC_SWEEP)
+            && let Some(shared) = self.session.core.shared_key()
         {
             view.zec_sweep = match ports
                 .zec
-                .confirmations(&sweep.txid)
+                .confirmations(&shared, &sweep.txid)
                 .await
                 .map_err(RunnerError::Port)?
             {
