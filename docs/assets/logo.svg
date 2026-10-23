@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="ZecSplit">
+  <rect width="120" height="120" rx="26" fill="#0f1115"/>
+  <path d="M30 30 H90 V44 L66 60 H44 L70 44 H30 Z" fill="#f4b728"/>
+  <path d="M90 90 H30 V76 L54 60 H76 L50 76 H90 Z" fill="#f7931a"/>
+</svg>
