@@ -3,14 +3,12 @@
 use std::collections::VecDeque;
 
 use async_trait::async_trait;
-use bitcoin::{Transaction, Txid};
-use zecsplit_btc::sources::{Agreement, BtcSource, confirmed_on_all, tip_on_all};
+use bitcoin::Transaction;
+use zecsplit_btc::sources::{Broadcast, BtcSource, fetch_any, swap_status, tip_on_all};
 use zecsplit_crypto::{Ask, Role};
 use zecsplit_protocol::alice::{AliceAction, AliceInput, AliceState, step_alice};
-use zecsplit_protocol::machine::{
-    AbortReason, Alert, ChainView, Params, SweepStatus, TxStatus, ZecLock,
-};
-use zecsplit_protocol::messages::{Envelope, Message, Network, PROTOCOL_VERSION, Quote};
+use zecsplit_protocol::machine::{AbortReason, Alert, ChainView, Params, SweepStatus};
+use zecsplit_protocol::messages::{Envelope, Message, Network, PROTOCOL_VERSION};
 use zecsplit_protocol::recovery::{SecretString, open, seal};
 use zecsplit_protocol::session::Shared;
 use zecsplit_protocol::session::alice::AliceSession;
@@ -39,12 +37,6 @@ pub trait Maker: Send + Sync {
     async fn send(&self, msg: &Envelope) -> Result<Option<Envelope>, String>;
     /// The maker's next pending message for `swap_id`, if any.
     async fn next(&self, swap_id: &[u8; 32]) -> Result<Option<Envelope>, String>;
-}
-
-/// §6.3-R1: idempotent broadcast to every source (T-023).
-#[async_trait]
-pub trait Broadcast: Send + Sync {
-    async fn broadcast(&self, tx: &Transaction) -> Result<(), String>;
 }
 
 /// The Zcash side Alice needs: sweeping the lock back on the refund path (§5.3-R3).
@@ -79,27 +71,8 @@ pub struct AliceRunner {
 
 const ZEC_SWEEP: &str = "zec_sweep";
 
-fn params(q: &Quote) -> Params {
-    Params {
-        t1: q.t1,
-        t2: q.t2,
-        n_conf_btc: q.n_conf_btc,
-        n_conf_zec: q.n_conf_zec,
-        redeem_margin: q.redeem_margin,
-    }
-}
-
 fn json<T: serde::Serialize>(v: &T) -> Result<String, RunnerError> {
     serde_json::to_string(v).map_err(|e| RunnerError::Saved(e.to_string()))
-}
-
-fn status(a: Agreement) -> TxStatus {
-    match a {
-        Agreement::Unseen => TxStatus::Unseen,
-        Agreement::Mempool => TxStatus::Mempool,
-        Agreement::Confirmed { height } => TxStatus::Confirmed { height },
-        Agreement::Disagree => TxStatus::SourcesDisagree,
-    }
 }
 
 /// §3.3-R4: the lock address for this swap's Zcash network.
@@ -145,7 +118,7 @@ impl AliceRunner {
         Ok(AliceRunner {
             swap_id: q.swap_id,
             state: AliceState::Quoted,
-            params: params(q),
+            params: Params::from(q),
             session,
             passphrase,
             maker_endpoint: maker_endpoint.to_string(),
@@ -174,7 +147,7 @@ impl AliceRunner {
         Ok(Some(AliceRunner {
             swap_id: row.id,
             state,
-            params: params(&session.core.quote),
+            params: Params::from(&session.core.quote),
             session,
             passphrase,
             maker_endpoint,
@@ -331,11 +304,7 @@ impl AliceRunner {
     ) -> Result<(), RunnerError> {
         let raw = bitcoin::consensus::encode::serialize(tx);
         store.put_tx(&self.swap_id, name, &raw, &tx.compute_txid().to_string())?;
-        ports
-            .broadcast
-            .broadcast(tx)
-            .await
-            .map_err(RunnerError::Port)?;
+        ports.broadcast.broadcast(tx).await?;
         store.mark_broadcast(&self.swap_id, name, now)?;
         Ok(())
     }
@@ -417,7 +386,7 @@ impl AliceRunner {
             return Ok(());
         };
         let refund_txid = templates.refund.compute_txid();
-        let Some(published) = self.fetch(ports, &refund_txid).await? else {
+        let Some(published) = fetch_any(ports.sources, &refund_txid).await? else {
             return Ok(());
         };
         let ask = self.session.ask_from_refund(&published)?;
@@ -435,52 +404,12 @@ impl AliceRunner {
         Ok(())
     }
 
-    async fn fetch(
-        &self,
-        ports: &Ports<'_>,
-        txid: &Txid,
-    ) -> Result<Option<Transaction>, RunnerError> {
-        for s in ports.sources {
-            if let Some(seen) = s.tx(txid).await? {
-                return Ok(Some(seen.tx));
-            }
-        }
-        Ok(None)
-    }
-
     /// §4.2-R1: every Bitcoin status comes from all sources agreeing.
     async fn view(&self, store: &Store, ports: &Ports<'_>) -> Result<ChainView, RunnerError> {
-        let btc_tip = tip_on_all(ports.sources).await?;
-        let mut view = ChainView {
-            btc_tip,
-            lock: TxStatus::Unseen,
-            redeem: TxStatus::Unseen,
-            cancel: TxStatus::Unseen,
-            refund: TxStatus::Unseen,
-            punish: TxStatus::Unseen,
-            zec_sweep: SweepStatus::Pending,
-            zec_lock: ZecLock::Unseen,
+        let mut view = match self.session.templates() {
+            Some(t) => ChainView::from(swap_status(ports.sources, t).await?),
+            None => ChainView::at_tip(tip_on_all(ports.sources).await?),
         };
-        if let Some(t) = self.session.templates() {
-            let lock_tx = &t.lock.unsigned_tx;
-            let lock_out = lock_tx
-                .output
-                .iter()
-                .find(|o| o.value == t.v_lock)
-                .ok_or_else(|| RunnerError::Saved("lock output".into()))?;
-            view.lock =
-                status(confirmed_on_all(ports.sources, &lock_tx.compute_txid(), lock_out).await?);
-            for (slot, tx) in [
-                (&mut view.redeem, &t.redeem),
-                (&mut view.cancel, &t.cancel),
-                (&mut view.refund, &t.refund),
-                (&mut view.punish, &t.punish),
-            ] {
-                *slot = status(
-                    confirmed_on_all(ports.sources, &tx.compute_txid(), &tx.output[0]).await?,
-                );
-            }
-        }
         if let Some(sweep) = store
             .txs(&self.swap_id)?
             .into_iter()

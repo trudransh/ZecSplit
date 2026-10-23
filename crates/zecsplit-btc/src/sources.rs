@@ -4,9 +4,11 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::consensus::encode::deserialize_hex;
-use bitcoin::{Transaction, TxOut, Txid};
+use bitcoin::{ScriptBuf, Transaction, TxOut, Txid};
 use serde::Deserialize;
 use serde_json::{Value, json};
+
+use crate::txs::SwapTxs;
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 const RPC_NOT_FOUND: i64 = -5;
@@ -87,6 +89,68 @@ pub async fn confirmed_on_all(
         views.push(view.map(|v| v.height));
     }
     Ok(agree(&views))
+}
+
+/// §6.3-R1: idempotent broadcast to every source (T-023).
+#[async_trait]
+pub trait Broadcast: Send + Sync {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError>;
+}
+
+/// What all sources agree on about the tip and a swap's five transactions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SwapStatus {
+    pub tip: u32,
+    pub lock: Agreement,
+    pub redeem: Agreement,
+    pub cancel: Agreement,
+    pub refund: Agreement,
+    pub punish: Agreement,
+}
+
+/// §4.2-R1: the lowest tip and each swap transaction as every source sees it.
+pub async fn swap_status(
+    sources: &[&dyn BtcSource],
+    txs: &SwapTxs,
+) -> Result<SwapStatus, SourceError> {
+    let lock_out = TxOut {
+        value: txs.v_lock,
+        script_pubkey: ScriptBuf::new_p2wsh(&txs.w_script.wscript_hash()),
+    };
+    let spend = |tx: &Transaction| (tx.compute_txid(), tx.output[0].clone());
+    let watched = [
+        (txs.lock.unsigned_tx.compute_txid(), lock_out),
+        spend(&txs.redeem),
+        spend(&txs.cancel),
+        spend(&txs.refund),
+        spend(&txs.punish),
+    ];
+    let mut seen = [Agreement::Unseen; 5];
+    for (slot, (txid, out)) in seen.iter_mut().zip(&watched) {
+        *slot = confirmed_on_all(sources, txid, out).await?;
+    }
+    let [lock, redeem, cancel, refund, punish] = seen;
+    Ok(SwapStatus {
+        tip: tip_on_all(sources).await?,
+        lock,
+        redeem,
+        cancel,
+        refund,
+        punish,
+    })
+}
+
+/// The transaction as the first source that has it reports it.
+pub async fn fetch_any(
+    sources: &[&dyn BtcSource],
+    txid: &Txid,
+) -> Result<Option<Transaction>, SourceError> {
+    for s in sources {
+        if let Some(seen) = s.tx(txid).await? {
+            return Ok(Some(seen.tx));
+        }
+    }
+    Ok(None)
 }
 
 /// Combines per-source views, always taking the weakest claim; only a confirmation one
