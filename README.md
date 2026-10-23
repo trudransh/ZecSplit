@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License">
   <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
   <img src="https://img.shields.io/badge/networks-regtest%20%7C%20testnet-lightgrey" alt="Networks">
+  <a href="https://zecsplit.gitbook.io/zecsplit-docs/"><img src="https://img.shields.io/badge/docs-gitbook-blue" alt="Docs"></a>
 </p>
 
 > [!WARNING]
@@ -127,7 +128,15 @@ just devnet-test    # lock and sweep on Zcash, Bitcoin sources, full swap on reg
 
 ## Docs
 
-The full documentation (protocol, threat model, privacy, architecture) is being written and will be linked here.
+Full documentation: **[zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/)**
+
+| Start here | |
+|---|---|
+| [Core concepts](https://zecsplit.gitbook.io/zecsplit-docs/core-concepts) | The idea in ten minutes |
+| [Protocol](https://zecsplit.gitbook.io/zecsplit-docs/protocol) | The spec, rule by rule |
+| [Threat model](https://zecsplit.gitbook.io/zecsplit-docs/security/threat-model) | 25 threats, their mitigations and tests |
+| [Privacy](https://zecsplit.gitbook.io/zecsplit-docs/security/privacy) | What each observer learns |
+| [Paper](https://zecsplit.gitbook.io/zecsplit-docs/resources/paper) | The protocol in paper form |
 
 ## License
 
