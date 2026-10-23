@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::consensus::encode::deserialize_hex;
+use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::{ScriptBuf, Transaction, TxOut, Txid};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -12,6 +12,7 @@ use crate::txs::SwapTxs;
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 const RPC_NOT_FOUND: i64 = -5;
+const RPC_ALREADY_IN_CHAIN: i64 = -27;
 
 /// A transaction as one source reports it; `height` is `None` while unconfirmed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -258,6 +259,19 @@ impl BtcSource for BitcoindRpc {
             }
         };
         Ok(Some(SourceTx { tx, height }))
+    }
+}
+
+#[async_trait]
+impl Broadcast for BitcoindRpc {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError> {
+        match self
+            .call("sendrawtransaction", json!([serialize_hex(tx)]))
+            .await
+        {
+            Err(SourceError::Rpc { code, .. }) if code == RPC_ALREADY_IN_CHAIN => Ok(()),
+            r => r.map(|_| ()),
+        }
     }
 }
 

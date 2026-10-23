@@ -49,6 +49,17 @@ pub struct Shared {
     pub rivk: [u8; 32],
 }
 
+impl Shared {
+    /// §3.3-R3: the lock's `ak ‖ nk ‖ rivk`.
+    pub fn lock_key(&self) -> zecsplit_zcash::LockKey<'_> {
+        zecsplit_zcash::LockKey {
+            ak: &self.ak,
+            nk: &self.nk,
+            rivk: &self.rivk,
+        }
+    }
+}
+
 /// This party's secrets: fresh (can still reveal) or restored from a saved session.
 enum Keys {
     Fresh(Box<KeyMaterial>),

@@ -46,12 +46,12 @@ pub trait Wallet: Send + Sync {
 /// Bob's own Zebra node (ADR-009): lock detection and the redeem-path sweep (§4.3, §4.5-R3).
 #[async_trait]
 pub trait ZecNode: Send + Sync {
-    /// §4.3-R1, §4.3-R2: the lock notes as this node sees them.
-    async fn lock(&self, shared: &Shared, zatoshis: u64) -> Result<ZecLock, String>;
+    /// §4.3-R1, §4.3-R2: the lock notes as this node sees them, counting `min_conf` confirmations.
+    async fn lock(&self, shared: &Shared, zatoshis: u64, min_conf: u32) -> Result<ZecLock, String>;
     /// Sweeps every lock note with `ask`; returns the txid.
     async fn sweep(&self, shared: &Shared, ask: &Ask) -> Result<String, String>;
     /// Confirmations of a sweep, `None` while unmined.
-    async fn confirmations(&self, txid: &str) -> Result<Option<u32>, String>;
+    async fn confirmations(&self, shared: &Shared, txid: &str) -> Result<Option<u32>, String>;
 }
 
 /// Everything the runner talks to.
@@ -402,7 +402,11 @@ impl BobRunner {
         if let Some(shared) = self.session.core.shared_key() {
             view.zec_lock = ports
                 .zec
-                .lock(&shared, self.session.core.quote.zec_amount)
+                .lock(
+                    &shared,
+                    self.session.core.quote.zec_amount,
+                    u32::from(self.params.n_conf_zec),
+                )
                 .await
                 .map_err(RunnerError::Port)?;
         }
@@ -410,10 +414,11 @@ impl BobRunner {
             .txs(&self.swap_id)?
             .into_iter()
             .find(|t| t.name == ZEC_SWEEP)
+            && let Some(shared) = self.session.core.shared_key()
         {
             view.zec_sweep = match ports
                 .zec
-                .confirmations(&sweep.txid)
+                .confirmations(&shared, &sweep.txid)
                 .await
                 .map_err(RunnerError::Port)?
             {
