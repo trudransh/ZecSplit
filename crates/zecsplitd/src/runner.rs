@@ -408,7 +408,7 @@ impl AliceRunner {
     }
 
     /// §4.2-R1: every Bitcoin status comes from all sources agreeing.
-    async fn view(&self, store: &Store, ports: &Ports<'_>) -> Result<ChainView, RunnerError> {
+    async fn view(&self, store: &mut Store, ports: &Ports<'_>) -> Result<ChainView, RunnerError> {
         let mut view = match self.session.templates() {
             Some(t) => ChainView::from(swap_status(ports.sources, t).await?),
             None => ChainView::at_tip(tip_on_all(ports.sources).await?),
