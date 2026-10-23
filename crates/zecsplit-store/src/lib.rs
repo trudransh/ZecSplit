@@ -248,6 +248,28 @@ impl Store {
         Ok(())
     }
 
+    /// §6.4, ADR-039: replaces the sealed session bundle of a swap.
+    pub fn put_secret(&mut self, id: &[u8; 32], ciphertext: &[u8]) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO secrets (swap_id, ciphertext) VALUES (?1, ?2)
+             ON CONFLICT (swap_id) DO UPDATE SET ciphertext = excluded.ciphertext",
+            params![&id[..], ciphertext],
+        )?;
+        Ok(())
+    }
+
+    /// The sealed session bundle of a swap, if saved.
+    pub fn secret(&self, id: &[u8; 32]) -> Result<Option<Vec<u8>>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT ciphertext FROM secrets WHERE swap_id = ?1",
+                [&id[..]],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// Every stored tx of a swap, by name.
     pub fn txs(&self, id: &[u8; 32]) -> Result<Vec<TxRow>, StoreError> {
         let mut stmt = self.conn.prepare(
