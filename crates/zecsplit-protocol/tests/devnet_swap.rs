@@ -86,8 +86,9 @@ async fn t_031_happy_path_swap_on_regtest() {
     let bob_payout = btc(&["getnewaddress", "bob", "bech32"]);
     let bob_refund = btc(&["getnewaddress", "refund", "bech32"]);
 
-    let mut a = Core::new(&mut OsRng, quote(), Role::Alice, alice_payout.clone()).unwrap();
-    let mut b = Core::new(&mut OsRng, quote(), Role::Bob, bob_payout).unwrap();
+    let q = quote();
+    let mut a = Core::new(&mut OsRng, q.clone(), Role::Alice, alice_payout.clone()).unwrap();
+    let mut b = Core::new(&mut OsRng, q, Role::Bob, bob_payout).unwrap();
     a.on_commit(&b.commit_msg()).unwrap();
     b.on_commit(&a.commit_msg()).unwrap();
     let (reveal_a, reveal_b) = (a.reveal_msg().unwrap(), b.reveal_msg().unwrap());
