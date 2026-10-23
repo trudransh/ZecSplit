@@ -23,7 +23,9 @@ use zecsplit_protocol::session::bob::BobSession;
 use zecsplit_protocol::session::{Core, Shared};
 use zecsplit_store::Store;
 
-use super::{AliceRunner, Broadcast, Maker, Ports, ZecSweep};
+use zecsplit_btc::sources::Broadcast;
+
+use super::{AliceRunner, Maker, Ports, ZecSweep};
 
 #[derive(Default)]
 struct Chain {
@@ -77,7 +79,7 @@ impl BtcSource for FakeChain {
 
 #[async_trait]
 impl Broadcast for FakeChain {
-    async fn broadcast(&self, tx: &Transaction) -> Result<(), String> {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError> {
         self.put(tx.clone());
         Ok(())
     }

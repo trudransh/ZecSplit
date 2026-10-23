@@ -1,5 +1,9 @@
 //! Types shared by both state machines (PROTOCOL_SPEC §6).
 
+use zecsplit_btc::sources::{Agreement, SwapStatus};
+
+use crate::messages::Quote;
+
 /// Quote constants the machines need (§2, §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Params {
@@ -91,6 +95,58 @@ pub enum Alert {
     BtcSourcesDisagree,
     MarginTooSmall,
     PeerMisbehavedAfterLock,
+}
+
+impl From<&Quote> for Params {
+    fn from(q: &Quote) -> Self {
+        Params {
+            t1: q.t1,
+            t2: q.t2,
+            n_conf_btc: q.n_conf_btc,
+            n_conf_zec: q.n_conf_zec,
+            redeem_margin: q.redeem_margin,
+        }
+    }
+}
+
+impl From<Agreement> for TxStatus {
+    fn from(a: Agreement) -> Self {
+        match a {
+            Agreement::Unseen => TxStatus::Unseen,
+            Agreement::Mempool => TxStatus::Mempool,
+            Agreement::Confirmed { height } => TxStatus::Confirmed { height },
+            Agreement::Disagree => TxStatus::SourcesDisagree,
+        }
+    }
+}
+
+impl ChainView {
+    /// Nothing seen yet at `btc_tip`.
+    pub fn at_tip(btc_tip: u32) -> Self {
+        ChainView {
+            btc_tip,
+            lock: TxStatus::Unseen,
+            redeem: TxStatus::Unseen,
+            cancel: TxStatus::Unseen,
+            refund: TxStatus::Unseen,
+            punish: TxStatus::Unseen,
+            zec_sweep: SweepStatus::Pending,
+            zec_lock: ZecLock::Unseen,
+        }
+    }
+}
+
+impl From<SwapStatus> for ChainView {
+    fn from(s: SwapStatus) -> Self {
+        ChainView {
+            lock: s.lock.into(),
+            redeem: s.redeem.into(),
+            cancel: s.cancel.into(),
+            refund: s.refund.into(),
+            punish: s.punish.into(),
+            ..ChainView::at_tip(s.tip)
+        }
+    }
 }
 
 #[cfg(test)]
