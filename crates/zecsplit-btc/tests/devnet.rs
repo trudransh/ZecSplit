@@ -1,10 +1,14 @@
-//! T-020 on the regtest devnet: two sources agree on a real payment (§4.2-R1).
+//! The regtest devnet: two sources agree on a real payment (§4.2-R1, T-020); broadcast is
+//! idempotent (§6.3-R1, T-023).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use bitcoin::{Amount, ScriptBuf, TxOut, Txid};
+use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
+use bitcoin::{Amount, ScriptBuf, Transaction, TxOut, Txid};
 use serde_json::json;
-use zecsplit_btc::sources::{Agreement, BitcoindRpc, BtcSource, confirmed_on_all, tip_on_all};
+use zecsplit_btc::sources::{
+    Agreement, BitcoindRpc, Broadcast, BtcSource, confirmed_on_all, tip_on_all,
+};
 
 const NODE: &str = "http://127.0.0.1:18443";
 
@@ -59,4 +63,60 @@ async fn spec_4_2_r1_two_rpc_sources_agree_on_regtest() {
     let unknown = Txid::from_raw_hash(bitcoin::hashes::Hash::all_zeros());
     let got = confirmed_on_all(&sources, &unknown, &expect).await.unwrap();
     assert_eq!(got, Agreement::Unseen);
+}
+
+/// Funds and signs a 0.001 BTC payment with the devnet wallet without broadcasting it.
+async fn signed_payment(wallet: &BitcoindRpc, addr: &str) -> Transaction {
+    let raw = wallet
+        .call("createrawtransaction", json!([[], {addr: 0.001}]))
+        .await
+        .unwrap();
+    let funded = wallet
+        .call("fundrawtransaction", json!([raw]))
+        .await
+        .unwrap();
+    sign(wallet, &funded["hex"]).await
+}
+
+async fn sign(wallet: &BitcoindRpc, hex: &serde_json::Value) -> Transaction {
+    let signed = wallet
+        .call("signrawtransactionwithwallet", json!([hex]))
+        .await
+        .unwrap();
+    assert_eq!(signed["complete"], true);
+    deserialize_hex(signed["hex"].as_str().unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn spec_6_3_r1_rebroadcast_is_a_no_op_on_regtest() {
+    if !devnet() {
+        return;
+    }
+    let (node, wallet) = (rpc(""), rpc("/wallet/devnet"));
+    let addr = wallet.call("getnewaddress", json!([])).await.unwrap();
+    let addr = addr.as_str().unwrap();
+    let tx = signed_payment(&wallet, addr).await;
+    let txid = tx.compute_txid();
+    // Signed now: once tx confirms, the wallet no longer has its inputs to sign with.
+    let mut conflict = tx.clone();
+    conflict.output[0].value -= Amount::from_sat(500);
+    for input in &mut conflict.input {
+        input.witness.clear();
+    }
+    let conflict = sign(&wallet, &json!(serialize_hex(&conflict))).await;
+
+    node.broadcast(&tx).await.unwrap();
+    node.broadcast(&tx).await.unwrap();
+    assert_eq!(node.tx(&txid).await.unwrap().unwrap().height, None);
+
+    wallet
+        .call("generatetoaddress", json!([1, addr]))
+        .await
+        .unwrap();
+    node.broadcast(&tx).await.unwrap();
+    let tip = node.tip().await.unwrap();
+    assert_eq!(node.tx(&txid).await.unwrap().unwrap().height, Some(tip));
+
+    // A different spend of the same inputs is a real rejection, not a no-op.
+    assert!(node.broadcast(&conflict).await.is_err());
 }

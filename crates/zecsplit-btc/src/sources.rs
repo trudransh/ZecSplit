@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::consensus::encode::deserialize_hex;
+use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::{ScriptBuf, Transaction, TxOut, Txid};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -95,6 +95,20 @@ pub async fn confirmed_on_all(
 #[async_trait]
 pub trait Broadcast: Send + Sync {
     async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError>;
+}
+
+/// §6.3-R1: a rejected broadcast is a no-op when the source already has the transaction
+/// (in its mempool or a block); any other rejection, such as a conflicting spend, stands.
+async fn known_or(
+    src: &dyn BtcSource,
+    tx: &Transaction,
+    sent: Result<(), SourceError>,
+) -> Result<(), SourceError> {
+    let Err(e) = sent else { return Ok(()) };
+    match src.tx(&tx.compute_txid()).await {
+        Ok(Some(_)) => Ok(()),
+        _ => Err(e),
+    }
 }
 
 /// What all sources agree on about the tip and a swap's five transactions.
@@ -261,6 +275,17 @@ impl BtcSource for BitcoindRpc {
     }
 }
 
+#[async_trait]
+impl Broadcast for BitcoindRpc {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError> {
+        let sent = self
+            .call("sendrawtransaction", json!([serialize_hex(tx)]))
+            .await
+            .map(drop);
+        known_or(self, tx, sent).await
+    }
+}
+
 /// An Esplora REST endpoint (plain HTTP until T-025 adds TLS).
 pub struct Esplora {
     http: reqwest::Client,
@@ -307,6 +332,27 @@ impl BtcSource for Esplora {
         let status: EsploraStatus = res.ok_or_else(|| bad("no status"))?.json().await?;
         let height = status.block_height.filter(|_| status.confirmed);
         Ok(Some(SourceTx { tx, height }))
+    }
+}
+
+#[async_trait]
+impl Broadcast for Esplora {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError> {
+        let sent = async {
+            let res = self
+                .http
+                .post(format!("{}/tx", self.base))
+                .body(serialize_hex(tx))
+                .send()
+                .await?;
+            if res.status().is_success() {
+                Ok(())
+            } else {
+                Err(bad(res.text().await?))
+            }
+        }
+        .await;
+        known_or(self, tx, sent).await
     }
 }
 
