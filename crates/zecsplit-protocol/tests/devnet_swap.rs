@@ -1,22 +1,31 @@
-//! T-031 on the regtest devnet: a full happy-path swap in-process, real BTC lock and redeem, real ZEC lock and sweep.
+//! The regtest devnet: a full happy-path swap in-process, real BTC lock and redeem, real ZEC lock
+//! and sweep (T-031); the cancel, refund and punish paths on Bitcoin with their timelocks (T-024, G3).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::process::Command;
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::{Address, Psbt};
+use bitcoin::{Address, Psbt, Transaction};
+use zecsplit_btc::sources::{BitcoindRpc, Broadcast, SourceError};
 use zecsplit_crypto::Role;
 use zecsplit_crypto::rand_core::OsRng;
 use zecsplit_protocol::messages::{Network, Quote};
-use zecsplit_protocol::session::Core;
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_protocol::session::bob::BobSession;
+use zecsplit_protocol::session::{Core, Shared};
 use zecsplit_zcash::{lock_keys, lock_status, regtest, sweep};
 
 const LIGHT_SERVER: &str = "http://127.0.0.1:9067";
 const SCRIPTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../devnet/scripts");
+const COMPOSE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../devnet/docker-compose.yml"
+);
 const ZEC_AMOUNT: u64 = 30_000_000;
+const NODE: &str = "http://127.0.0.1:18443";
+const T1: u16 = 20;
+const T2: u16 = 20;
 
 fn script(args: &[&str]) -> String {
     let out = Command::new(format!("{SCRIPTS}/{}", args[0]))
@@ -31,10 +40,38 @@ fn script(args: &[&str]) -> String {
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
 
+/// `bitcoin-cli` on the devnet wallet, run through docker directly (as `btc-cli` does) so it also
+/// works where the bash scripts can't run, such as Windows.
 fn btc(args: &[&str]) -> String {
-    let mut all = vec!["btc-cli"];
-    all.extend_from_slice(args);
-    script(&all)
+    let out = Command::new("docker")
+        .args([
+            "compose",
+            "-f",
+            COMPOSE,
+            "exec",
+            "-T",
+            "bitcoind",
+            "bitcoin-cli",
+        ])
+        .args([
+            "-regtest",
+            "-rpcuser=devnet",
+            "-rpcpassword=devnet",
+            "-rpcwallet=devnet",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
+}
+
+fn mine_btc(n: u32) {
+    btc(&["-generate", &n.to_string()]);
 }
 
 fn btc_json(args: &[&str]) -> serde_json::Value {
@@ -67,8 +104,8 @@ fn quote() -> Quote {
         zec_amount: ZEC_AMOUNT,
         btc_amount: 150_000,
         btc_fee_rate: 2,
-        t1: 20,
-        t2: 20,
+        t1: T1,
+        t2: T2,
         n_conf_btc: 1,
         n_conf_zec: 1,
         redeem_margin: 5,
@@ -76,12 +113,17 @@ fn quote() -> Quote {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn t_031_happy_path_swap_on_regtest() {
-    if std::env::var_os("ZECSPLIT_DEVNET").is_none() {
-        eprintln!("skipped: set ZECSPLIT_DEVNET=1 with `just devnet-up` running");
-        return;
-    }
+struct Locked {
+    alice: AliceSession,
+    bob: BobSession,
+    shared: Shared,
+    alice_payout: String,
+    bob_refund: String,
+    lock_txid: String,
+}
+
+/// Setup through §3.5 and a confirmed `tx_lock`: the common start of every path.
+fn locked_swap() -> Locked {
     let alice_payout = btc(&["getnewaddress", "alice", "bech32"]);
     let bob_payout = btc(&["getnewaddress", "bob", "bech32"]);
     let bob_refund = btc(&["getnewaddress", "refund", "bech32"]);
@@ -122,11 +164,35 @@ async fn t_031_happy_path_swap_on_regtest() {
     let signed = btc_json(&["walletprocesspsbt", &psbt_b64]);
     assert_eq!(signed["complete"], true);
     let lock_txid = btc(&["sendrawtransaction", signed["hex"].as_str().unwrap()]);
-    script(&["mine-btc", "1"]);
+    mine_btc(1);
     let lock_conf = btc_json(&["gettransaction", &lock_txid])["confirmations"]
         .as_u64()
         .unwrap();
     assert!(lock_conf >= 1, "tx_lock confirmed");
+    Locked {
+        alice,
+        bob,
+        shared,
+        alice_payout,
+        bob_refund,
+        lock_txid,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn t_031_happy_path_swap_on_regtest() {
+    if std::env::var_os("ZECSPLIT_DEVNET").is_none() {
+        eprintln!("skipped: set ZECSPLIT_DEVNET=1 with `just devnet-up` running");
+        return;
+    }
+    let Locked {
+        mut alice,
+        mut bob,
+        shared,
+        alice_payout,
+        lock_txid,
+        ..
+    } = locked_swap();
 
     let keys = lock_keys(&regtest(), &shared.ak, &shared.nk, &shared.rivk).unwrap();
     script(&["mine-zec", "3"]);
@@ -148,7 +214,7 @@ async fn t_031_happy_path_swap_on_regtest() {
     alice.on_encsig(&esig).unwrap();
     let redeem = alice.signed_redeem().unwrap();
     let redeem_txid = btc(&["sendrawtransaction", &serialize_hex(&redeem)]);
-    script(&["mine-btc", "1"]);
+    mine_btc(1);
     let mined = btc_json(&["getrawtransaction", &redeem_txid, "true"]);
     assert!(
         mined["confirmations"].as_u64().unwrap() >= 1,
@@ -180,4 +246,109 @@ async fn t_031_happy_path_swap_on_regtest() {
         "ZEC sweep mined: {swept}"
     );
     println!("swap done: lock {lock_txid}, redeem {redeem_txid}, sweep {sweep_txid}");
+}
+
+fn devnet() -> bool {
+    let on = std::env::var_os("ZECSPLIT_DEVNET").is_some();
+    if !on {
+        eprintln!("skipped: set ZECSPLIT_DEVNET=1 with `just devnet-up` running");
+    }
+    on
+}
+
+fn node() -> BitcoindRpc {
+    BitcoindRpc::new(NODE, "devnet", "devnet").unwrap()
+}
+
+fn tip() -> u32 {
+    btc(&["getblockcount"]).parse().unwrap()
+}
+
+fn mine_to(height: u32) {
+    let n = height - tip();
+    if n > 0 {
+        mine_btc(n);
+    }
+}
+
+fn height_of(txid: &str) -> u32 {
+    let tx = btc_json(&["getrawtransaction", txid, "true"]);
+    let header = btc_json(&["getblockheader", tx["blockhash"].as_str().unwrap()]);
+    u32::try_from(header["height"].as_u64().unwrap()).unwrap()
+}
+
+/// §3.4 relative timelock: `tx` can't enter a block below `unlock`. It is refused while the next
+/// block would be `unlock - 1`, accepted once the next block is `unlock`, then mined.
+async fn timelocked(tx: &Transaction, unlock: u32) -> String {
+    mine_to(unlock - 2);
+    let early = node().broadcast(tx).await;
+    assert!(
+        matches!(&early, Err(SourceError::Rpc { message, .. }) if message.contains("non-BIP68-final")),
+        "before its timelock: {early:?}"
+    );
+    mine_btc(1);
+    node().broadcast(tx).await.unwrap();
+    mine_btc(1);
+    let txid = tx.compute_txid().to_string();
+    assert_eq!(height_of(&txid), unlock);
+    txid
+}
+
+fn received(addr: &str) -> u64 {
+    let btc = btc_json(&["getreceivedbyaddress", addr, "1"])
+        .as_f64()
+        .unwrap();
+    bitcoin::Amount::from_btc(btc).unwrap().to_sat()
+}
+
+/// G3 items 2, 3 and 5: lock → cancel (refused before t1) → refund, and Alice recovers `s_b`.
+#[tokio::test(flavor = "multi_thread")]
+async fn t_024_cancel_then_refund_on_regtest() {
+    if !devnet() {
+        return;
+    }
+    let Locked {
+        alice,
+        bob,
+        bob_refund,
+        lock_txid,
+        ..
+    } = locked_swap();
+
+    let cancel = bob.signed_cancel().unwrap();
+    let cancel_txid = timelocked(&cancel, height_of(&lock_txid) + u32::from(T1)).await;
+
+    // Standard policy enforces low-S, so bitcoind accepting it checks the decrypted sig_A (item 5).
+    let refund = bob.signed_refund().unwrap();
+    node().broadcast(&refund).await.unwrap();
+    mine_btc(1);
+    let refund_txid = refund.compute_txid().to_string();
+    assert_eq!(height_of(&refund_txid), tip());
+    assert_eq!(received(&bob_refund), refund.output[0].value.to_sat());
+
+    // recover_share checks the share against Bob's public share, so Ok means s_b came back.
+    alice.ask_from_refund(&refund).unwrap();
+    println!("refund path: lock {lock_txid}, cancel {cancel_txid}, refund {refund_txid}");
+}
+
+/// G3 items 2 and 4: lock → cancel (refused before t1) → punish (refused before t2).
+#[tokio::test(flavor = "multi_thread")]
+async fn t_024_cancel_then_punish_on_regtest() {
+    if !devnet() {
+        return;
+    }
+    let Locked {
+        alice,
+        alice_payout,
+        lock_txid,
+        ..
+    } = locked_swap();
+
+    let cancel = alice.signed_cancel().unwrap();
+    let cancel_txid = timelocked(&cancel, height_of(&lock_txid) + u32::from(T1)).await;
+
+    let punish = alice.signed_punish().unwrap();
+    let punish_txid = timelocked(&punish, height_of(&cancel_txid) + u32::from(T2)).await;
+    assert_eq!(received(&alice_payout), punish.output[0].value.to_sat());
+    println!("punish path: lock {lock_txid}, cancel {cancel_txid}, punish {punish_txid}");
 }
