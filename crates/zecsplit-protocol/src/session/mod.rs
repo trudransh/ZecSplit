@@ -259,6 +259,11 @@ impl Core {
 
     /// §3.2-R3, §3.3: verifies the peer's reveal and derives `ak`, `σ`, `T`, `nk` and `rivk`.
     pub fn on_reveal(&mut self, body: &RevealBody) -> Result<Shared, SessionError> {
+        if self.seen("peer_reveal", body)?
+            && let Some(shared) = self.shared
+        {
+            return Ok(shared);
+        }
         let (c_a, c_b) = self.ordered()?;
         let peer_c = if self.role == Role::Alice { c_b } else { c_a };
         let own = self
@@ -309,6 +314,30 @@ impl Core {
         self.shared = Some(shared);
         self.record("peer_reveal", body)?;
         Ok(shared)
+    }
+
+    /// Whether `msg` was already recorded as `name`; a different one is refused (§6.3-R2 resends).
+    fn seen<T: serde::Serialize>(&self, name: &str, msg: &T) -> Result<bool, SessionError> {
+        let bytes = serde_json::to_vec(msg).map_err(|e| SessionError::Key(e.to_string()))?;
+        match self.log.iter().find(|(n, _)| *n == name) {
+            Some((_, b)) if *b == bytes => Ok(true),
+            Some(_) => Err(SessionError::OutOfOrder(
+                "conflicting repeat of a setup message",
+            )),
+            None => Ok(false),
+        }
+    }
+
+    /// The recorded `name` entry, if any.
+    fn logged<T: serde::de::DeserializeOwned>(
+        &self,
+        name: &str,
+    ) -> Result<Option<T>, SessionError> {
+        self.log
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, b)| persist::parse(b))
+            .transpose()
     }
 
     /// Appends an input to the replay log a saved session is rebuilt from.

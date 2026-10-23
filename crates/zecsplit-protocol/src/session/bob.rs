@@ -53,6 +53,9 @@ impl BobSession {
         psbt: Psbt,
         refund_addr: &str,
     ) -> Result<LockTemplate, SessionError> {
+        if self.txs.is_some() {
+            return Err(SessionError::OutOfOrder("lock template already built"));
+        }
         let p = self.core.btc_params(refund_addr)?;
         let v_lock = lock_value(&p).map_err(|e| SessionError::Template(e.to_string()))?;
         let psbt_base64 = psbt.to_string();
@@ -78,11 +81,19 @@ impl BobSession {
         Ok(tpl)
     }
 
+    /// §3.5-R1: the template already sent, for resending after a restart.
+    pub fn lock_template_msg(&self) -> Result<Option<LockTemplate>, SessionError> {
+        self.core.logged("lock_template")
+    }
+
     /// §3.5-R4, §3.5-R5: verifies Alice's cancel sig and refund adaptor sig, then returns Bob's cancel and punish sigs.
     pub fn on_setup_sigs_alice(
         &mut self,
         msg: &SetupSigsAlice,
     ) -> Result<SetupSigsBob, SessionError> {
+        if self.core.seen("setup_sigs_alice", msg)? {
+            return self.setup_sigs();
+        }
         let k_a = self.core.peer_btc_pk()?;
         let (_, d) = self.txs()?;
         let cancel = Signature::from_compact(&msg.sig_cancel)
@@ -95,15 +106,20 @@ impl BobSession {
         if !verify_enc(&k_a, &self.core.own_y()?, &d.refund, &esig) {
             return Err(SessionError::BadSignature("esig_A(tx_refund)"));
         }
-        let sk = self.core.own_btc_sk()?;
-        let reply = SetupSigsBob {
-            sig_cancel: sign(&sk, &d.cancel).serialize_compact().to_vec(),
-            sig_punish: sign(&sk, &d.punish).serialize_compact().to_vec(),
-        };
         self.sig_a_cancel = Some(cancel);
         self.esig_a_refund = Some(esig);
         self.core.record("setup_sigs_alice", msg)?;
-        Ok(reply)
+        self.setup_sigs()
+    }
+
+    /// §3.5-R3: Bob's cancel and punish signatures, re-derivable at any time (RFC6979).
+    pub fn setup_sigs(&self) -> Result<SetupSigsBob, SessionError> {
+        let (_, d) = self.txs()?;
+        let sk = self.core.own_btc_sk()?;
+        Ok(SetupSigsBob {
+            sig_cancel: sign(&sk, &d.cancel).serialize_compact().to_vec(),
+            sig_punish: sign(&sk, &d.punish).serialize_compact().to_vec(),
+        })
     }
 
     /// §3.5-R5: true only once Alice's cancel sig and refund adaptor sig have been verified.
@@ -124,7 +140,9 @@ impl BobSession {
             esig_redeem: encsig_to_bytes(&esig),
         };
         self.esig_b_redeem = Some(esig);
-        self.core.record("encsig", &msg)?;
+        if !self.core.seen("encsig", &msg)? {
+            self.core.record("encsig", &msg)?;
+        }
         Ok(msg)
     }
 
