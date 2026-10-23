@@ -57,15 +57,6 @@ pub struct SwapRow {
     pub t2_height: u32,
 }
 
-/// One append-only event.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Event {
-    pub seq: u64,
-    pub at: i64,
-    pub kind: String,
-    pub data_json: String,
-}
-
 /// A stored transaction and what is known about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxRow {
@@ -73,7 +64,6 @@ pub struct TxRow {
     pub raw: Vec<u8>,
     pub txid: String,
     pub broadcast_at: Option<i64>,
-    pub conf_height: Option<u32>,
 }
 
 /// The engine's or maker's durable swap state.
@@ -211,22 +201,6 @@ impl Store {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    /// A swap's event log in order.
-    pub fn events(&self, id: &[u8; 32]) -> Result<Vec<Event>, StoreError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT seq, at, kind, data_json FROM events WHERE swap_id = ?1 ORDER BY seq",
-        )?;
-        let rows = stmt.query_map([&id[..]], |r| {
-            Ok(Event {
-                seq: r.get(0)?,
-                at: r.get(1)?,
-                kind: r.get(2)?,
-                data_json: r.get(3)?,
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
-    }
-
     /// §6.3-R1: stores a signed tx once; storing the same bytes again is a no-op.
     pub fn put_tx(
         &mut self,
@@ -274,27 +248,10 @@ impl Store {
         Ok(())
     }
 
-    /// Records the height a stored tx confirmed at.
-    pub fn mark_confirmed(
-        &mut self,
-        id: &[u8; 32],
-        name: &str,
-        height: u32,
-    ) -> Result<(), StoreError> {
-        let n = self.conn.execute(
-            "UPDATE txs SET conf_height = ?3 WHERE swap_id = ?1 AND name = ?2",
-            params![&id[..], name, height],
-        )?;
-        if n == 0 {
-            return Err(StoreError::UnknownSwap);
-        }
-        Ok(())
-    }
-
     /// Every stored tx of a swap, by name.
     pub fn txs(&self, id: &[u8; 32]) -> Result<Vec<TxRow>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT name, raw, txid, broadcast_at, conf_height FROM txs WHERE swap_id = ?1 ORDER BY name",
+            "SELECT name, raw, txid, broadcast_at FROM txs WHERE swap_id = ?1 ORDER BY name",
         )?;
         let rows = stmt.query_map([&id[..]], |r| {
             Ok(TxRow {
@@ -302,7 +259,6 @@ impl Store {
                 raw: r.get(1)?,
                 txid: r.get(2)?,
                 broadcast_at: r.get(3)?,
-                conf_height: r.get(4)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -347,13 +303,6 @@ mod tests {
             store.state(&[1; 32]).unwrap().as_deref(),
             Some("\"Committed\"")
         );
-        let kinds: Vec<_> = store
-            .events(&[1; 32])
-            .unwrap()
-            .into_iter()
-            .map(|e| e.kind)
-            .collect();
-        assert_eq!(kinds, ["created", "step"]);
     }
 
     #[test]
@@ -408,11 +357,9 @@ mod tests {
         ));
         store.mark_broadcast(&[1; 32], "redeem", 20).unwrap();
         store.mark_broadcast(&[1; 32], "redeem", 30).unwrap();
-        store.mark_confirmed(&[1; 32], "redeem", 125).unwrap();
 
         let txs = store.txs(&[1; 32]).unwrap();
         assert_eq!(txs.len(), 1);
         assert_eq!(txs[0].broadcast_at, Some(20));
-        assert_eq!(txs[0].conf_height, Some(125));
     }
 }

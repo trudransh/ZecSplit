@@ -12,7 +12,6 @@ pub const TX_REFUND: &str = "tx_refund";
 pub const TX_PUNISH: &str = "tx_punish";
 pub const SIG_B_CANCEL: &str = "sig_b_cancel";
 pub const SIG_B_PUNISH: &str = "sig_b_punish";
-pub const ESIG_B_REDEEM: &str = "esig_b_redeem";
 pub const ESIG_A_REFUND: &str = "esig_a_refund";
 
 /// §6.4-R1: what Alice's file must hold before it may be written.
@@ -94,8 +93,7 @@ fn put(out: &mut Vec<u8>, field: &[u8]) -> Result<(), RecoveryError> {
     if field.len() > MAX_FIELD {
         return Err(RecoveryError::Format);
     }
-    let len = u32::try_from(field.len()).map_err(|_| RecoveryError::Format)?;
-    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(&(field.len() as u32).to_le_bytes());
     out.extend_from_slice(field);
     Ok(())
 }
@@ -116,7 +114,7 @@ fn encode(b: &RecoveryBundle) -> Result<Zeroizing<Vec<u8>>, RecoveryError> {
     out.extend_from_slice(&b.transcript);
     put(&mut out, b.quote_json.as_bytes())?;
     put(&mut out, b.maker_endpoint.as_bytes())?;
-    out.push(u8::try_from(b.blobs.len()).map_err(|_| RecoveryError::Format)?);
+    out.push(b.blobs.len() as u8);
     for (name, bytes) in &b.blobs {
         put(&mut out, name.as_bytes())?;
         put(&mut out, bytes)?;
@@ -146,8 +144,7 @@ impl<'a> Reader<'a> {
             .take(4)?
             .try_into()
             .map_err(|_| RecoveryError::Format)?;
-        let len =
-            usize::try_from(u32::from_le_bytes(len_bytes)).map_err(|_| RecoveryError::Format)?;
+        let len = u32::from_le_bytes(len_bytes) as usize;
         if len > MAX_FIELD {
             return Err(RecoveryError::Format);
         }

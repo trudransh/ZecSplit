@@ -115,14 +115,7 @@ pub struct Digests {
 }
 
 fn digests(txs: &SwapTxs) -> Result<Digests, SessionError> {
-    let v_lock = txs
-        .lock
-        .unsigned_tx
-        .output
-        .iter()
-        .find(|o| o.script_pubkey == ScriptBuf::new_p2wsh(&txs.w_script.wscript_hash()))
-        .map(|o| o.value)
-        .ok_or(SessionError::Template("no W output".into()))?;
+    let v_lock = txs.v_lock;
     let v_cancel = txs.cancel.output[0].value;
     let d = |tx: &Transaction, v: Amount| {
         sighash(tx, &txs.w_script, v).ok_or(SessionError::Template("sighash".into()))
@@ -231,9 +224,7 @@ impl Core {
     /// §3.2-R3, §3.3: verifies the peer's reveal and derives `ak`, `σ`, `T`, `nk` and `rivk`.
     pub fn on_reveal(&mut self, body: &RevealBody) -> Result<Shared, SessionError> {
         let (c_a, c_b) = self.ordered()?;
-        let peer_c = self
-            .peer_commitment
-            .ok_or(SessionError::OutOfOrder("no peer commit"))?;
+        let peer_c = if self.role == Role::Alice { c_b } else { c_a };
         let own = self
             .own_reveal
             .as_ref()
@@ -287,11 +278,6 @@ impl Core {
         self.peer
             .as_ref()
             .ok_or(SessionError::OutOfOrder("no peer reveal"))
-    }
-
-    /// The derived Zcash setup, once both reveals are in.
-    pub fn shared(&self) -> Option<Shared> {
-        self.shared
     }
 
     fn own_btc_sk(&self) -> Result<SecretKey, SessionError> {

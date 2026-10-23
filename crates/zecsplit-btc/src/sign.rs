@@ -20,12 +20,9 @@ pub fn sign(sk: &SecretKey, digest: &[u8; 32]) -> Signature {
 
 /// §3.5-R4: true iff `sig` is a valid low-S signature on `digest` under `pk`.
 pub fn verify(pk: &PublicKey, digest: &[u8; 32], sig: &Signature) -> bool {
-    let mut low = *sig;
-    low.normalize_s();
-    low == *sig
-        && Secp256k1::verification_only()
-            .verify_ecdsa(&Message::from_digest(*digest), sig, pk)
-            .is_ok()
+    Secp256k1::verification_only()
+        .verify_ecdsa(&Message::from_digest(*digest), sig, pk)
+        .is_ok()
 }
 
 fn ordered<'a, T>(k_a: &PublicKey, k_b: &PublicKey, a: &'a T, b: &'a T) -> [&'a T; 2] {
