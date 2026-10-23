@@ -4770,10 +4770,12 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "zcash_protocol",
  "zecsplit-btc",
  "zecsplit-crypto",
  "zecsplit-protocol",
  "zecsplit-store",
+ "zecsplit-zcash",
  "zecsplitd",
 ]
 
@@ -4814,6 +4816,7 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "getrandom 0.4.3",
+ "hex",
  "orchard",
  "pasta_curves 0.6.1",
  "pczt",

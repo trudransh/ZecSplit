@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 async-trait.workspace = true
 getrandom.workspace = true
+hex.workspace = true
 zecsplit-crypto = { path = "../zecsplit-crypto" }
 orchard.workspace = true
 pasta_curves.workspace = true

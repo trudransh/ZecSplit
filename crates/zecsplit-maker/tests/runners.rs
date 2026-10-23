@@ -2,6 +2,8 @@
 
 #![allow(clippy::unwrap_used, clippy::type_complexity)]
 
+mod common;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -16,13 +18,14 @@ use zecsplit_maker::runner::{self as bob, BobRunner, Wallet, ZecNode};
 use zecsplit_protocol::alice::{AliceInput, AliceState};
 use zecsplit_protocol::bob::{BobInput, BobState};
 use zecsplit_protocol::machine::{Outcome, ZecLock};
-use zecsplit_protocol::messages::{Envelope, Network, Quote};
-use zecsplit_protocol::recovery::SecretString;
+use zecsplit_protocol::messages::{Network, Quote};
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_protocol::session::bob::BobSession;
 use zecsplit_protocol::session::{Core, Shared};
 use zecsplit_store::Store;
-use zecsplitd::runner::{self as alice, AliceRunner, Maker, ZecSweep};
+use zecsplitd::runner::{self as alice, AliceRunner, ZecSweep};
+
+use common::{Link, pass};
 
 #[derive(Default)]
 struct FakeChain(Mutex<(u32, HashMap<Txid, (Transaction, Option<u32>)>)>);
@@ -114,14 +117,14 @@ impl ZecSweep for FakeZcash {
     async fn sweep(&self, shared: &Shared, ask: &Ask) -> Result<String, String> {
         Ok(self.sweep_as("alice", shared, ask))
     }
-    async fn confirmations(&self, txid: &str) -> Result<Option<u32>, String> {
+    async fn confirmations(&self, _: &Shared, txid: &str) -> Result<Option<u32>, String> {
         Ok(self.confs(txid))
     }
 }
 
 #[async_trait]
 impl ZecNode for FakeZcash {
-    async fn lock(&self, _: &Shared, _: u64) -> Result<ZecLock, String> {
+    async fn lock(&self, _: &Shared, _: u64, _: u32) -> Result<ZecLock, String> {
         Ok(match *self.paid.lock().unwrap() {
             Some(confirmations) if !self.bob_blind => ZecLock::Correct { confirmations },
             _ => ZecLock::Unseen,
@@ -130,30 +133,8 @@ impl ZecNode for FakeZcash {
     async fn sweep(&self, shared: &Shared, ask: &Ask) -> Result<String, String> {
         Ok(self.sweep_as("bob", shared, ask))
     }
-    async fn confirmations(&self, txid: &str) -> Result<Option<u32>, String> {
+    async fn confirmations(&self, _: &Shared, txid: &str) -> Result<Option<u32>, String> {
         Ok(self.confs(txid))
-    }
-}
-
-/// The maker as the engine reaches it: Bob's runner behind INTERFACES §2.
-struct Link<'a> {
-    bob: tokio::sync::Mutex<(BobRunner, Store)>,
-    ports: bob::Ports<'a>,
-}
-
-#[async_trait]
-impl Maker for Link<'_> {
-    async fn send(&self, msg: &Envelope) -> Result<Option<Envelope>, String> {
-        let mut guard = self.bob.lock().await;
-        let (runner, store) = &mut *guard;
-        runner
-            .handle(store, &self.ports, msg.clone(), 0)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(runner.next_message())
-    }
-    async fn next(&self, _: &[u8; 32]) -> Result<Option<Envelope>, String> {
-        Ok(self.bob.lock().await.0.next_message())
     }
 }
 
@@ -208,10 +189,6 @@ fn lock_psbt(lock_spk: ScriptBuf, v_lock: Amount) -> Psbt {
 fn signs_for(ask: &Ask, shared: &Shared) -> bool {
     let sk = reddsa::SigningKey::<SpendAuth>::from_bytes(ask.expose_secret()).unwrap();
     <[u8; 32]>::from(reddsa::VerificationKey::from(&sk)) == shared.ak
-}
-
-fn pass() -> SecretString {
-    SecretString::from("test passphrase".to_owned())
 }
 
 /// Runs one swap to the end; `restart` rebuilds each runner from SQLite before every tick once it is saved (S-07).

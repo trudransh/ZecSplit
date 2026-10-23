@@ -14,11 +14,13 @@ zecsplit-btc = { path = "../zecsplit-btc" }
 zecsplit-crypto = { path = "../zecsplit-crypto" }
 zecsplit-protocol = { path = "../zecsplit-protocol" }
 zecsplit-store = { path = "../zecsplit-store" }
+zecsplit-zcash = { path = "../zecsplit-zcash" }
 async-trait.workspace = true
 bitcoin.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+zcash_protocol.workspace = true
 
 [dev-dependencies]
 zecsplitd = { path = "../zecsplitd" }
