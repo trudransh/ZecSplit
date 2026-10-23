@@ -70,6 +70,7 @@ pub struct AliceRunner {
 }
 
 const ZEC_SWEEP: &str = "zec_sweep";
+const MAX_MESSAGES_PER_TICK: usize = 8;
 
 fn json<T: serde::Serialize>(v: &T) -> Result<String, RunnerError> {
     serde_json::to_string(v).map_err(|e| RunnerError::Saved(e.to_string()))
@@ -212,19 +213,21 @@ impl AliceRunner {
         ports: &Ports<'_>,
         now: i64,
     ) -> Result<(), RunnerError> {
-        let pending = if self.state.is_terminal() {
-            None
-        } else {
-            ports
+        for _ in 0..MAX_MESSAGES_PER_TICK {
+            if self.state.is_terminal() {
+                break;
+            }
+            let Some(env) = ports
                 .maker
                 .next(&self.swap_id)
                 .await
                 .map_err(RunnerError::Port)?
-        };
-        if let Some(env) = pending
-            && let Some(input) = self.on_message(env, store)?
-        {
-            self.feed(store, ports, input, now).await?;
+            else {
+                break;
+            };
+            if let Some(input) = self.on_message(env, store)? {
+                self.feed(store, ports, input, now).await?;
+            }
         }
         let view = self.view(store, ports).await?;
         self.feed(store, ports, AliceInput::Chain(view), now).await
