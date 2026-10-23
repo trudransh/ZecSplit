@@ -24,6 +24,7 @@ devnet-test:
     ZECSPLIT_DEVNET=1 cargo test -p zecsplit-btc --test devnet -- --nocapture --test-threads=1
     ZECSPLIT_DEVNET=1 cargo test -p zecsplit-protocol --test devnet_swap -- --nocapture --test-threads=1
     ZECSPLIT_DEVNET=1 cargo test -p zecsplit-maker --test devnet_runners -- --nocapture --test-threads=1
+    ZECSPLIT_DEVNET=1 cargo test -p zecsplit-maker --test devnet_http -- --nocapture --test-threads=1
 
 devnet-down:
     docker compose -f devnet/docker-compose.yml down

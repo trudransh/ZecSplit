@@ -17,6 +17,8 @@ zecsplit-store = { path = "../zecsplit-store" }
 zecsplit-zcash = { path = "../zecsplit-zcash" }
 async-trait.workspace = true
 bitcoin.workspace = true
+hex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
