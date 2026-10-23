@@ -63,8 +63,8 @@ fn lock_psbt(lock_spk: ScriptBuf, v_lock: Amount) -> Psbt {
     psbt
 }
 
-/// Runs §3.1–§3.5 and returns both sessions with the setup signatures exchanged.
-fn setup() -> (AliceSession, BobSession, Shared) {
+/// Runs §3.1–§3.3 and returns both sessions with the shared key derived.
+fn revealed() -> (AliceSession, BobSession, Shared) {
     let mut a = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
     let mut b = Core::new(&mut OsRng, quote(), Role::Bob, addr(2)).unwrap();
     a.on_commit(&b.commit_msg()).unwrap();
@@ -77,9 +77,12 @@ fn setup() -> (AliceSession, BobSession, Shared) {
         shared_a, shared_b,
         "both sides derive the same ak, σ, T, nk, rivk"
     );
+    (AliceSession::new(a), BobSession::new(b), shared_a)
+}
 
-    let mut alice = AliceSession::new(a);
-    let mut bob = BobSession::new(b);
+/// Runs §3.1–§3.5 and returns both sessions with the setup signatures exchanged.
+fn setup() -> (AliceSession, BobSession, Shared) {
+    let (mut alice, mut bob, shared_a) = revealed();
     let refund = addr(3);
     let (spk, v_lock) = bob.lock_output(&refund).unwrap();
     let tpl = bob.lock_template(lock_psbt(spk, v_lock), &refund).unwrap();
@@ -226,7 +229,7 @@ fn spec_4_5_r1_unrelated_redeem_signature_does_not_yield_ask() {
 
 #[test]
 fn spec_3_5_r1_lock_template_with_wrong_value_is_rejected() {
-    let (mut alice, mut bob, _) = setup();
+    let (mut alice, mut bob, _) = revealed();
     let (spk, v) = bob.lock_output(&addr(3)).unwrap();
     let mut tpl = bob.lock_template(lock_psbt(spk, v), &addr(3)).unwrap();
     tpl.v_lock_sats += 1;
@@ -305,4 +308,39 @@ fn saving_before_the_reveals_is_refused() {
         AliceSession::new(core).save(""),
         Err(SessionError::OutOfOrder(_))
     ));
+}
+
+#[test]
+fn spec_6_3_r2_resent_setup_messages_are_accepted_unchanged() {
+    let (mut alice, mut bob, shared) = setup();
+    let tpl = bob.lock_template_msg().unwrap().unwrap();
+    assert_eq!(
+        alice.on_lock_template(&tpl).unwrap(),
+        alice.setup_sigs().unwrap()
+    );
+    let sigs_a = alice.setup_sigs().unwrap();
+    assert_eq!(
+        bob.on_setup_sigs_alice(&sigs_a).unwrap(),
+        bob.setup_sigs().unwrap()
+    );
+    alice.on_setup_sigs_bob(&bob.setup_sigs().unwrap()).unwrap();
+    let reveal_b = bob.core.reveal_msg().unwrap();
+    assert_eq!(alice.core.on_reveal(&reveal_b).unwrap(), shared);
+    let esig = bob.encsig().unwrap();
+    assert_eq!(bob.encsig().unwrap(), esig);
+    alice.on_encsig(&esig).unwrap();
+    alice.on_encsig(&esig).unwrap();
+    assert!(alice.is_complete());
+}
+
+#[test]
+fn spec_3_5_r1_conflicting_lock_template_is_refused() {
+    let (mut alice, mut bob, _) = setup();
+    let mut tpl = bob.lock_template_msg().unwrap().unwrap();
+    let before = alice.signed_cancel().unwrap();
+    tpl.refund_addr = addr(4);
+    assert!(alice.on_lock_template(&tpl).is_err());
+    assert_eq!(alice.signed_cancel().unwrap(), before);
+    let (spk, v_lock) = bob.lock_output(&addr(3)).unwrap();
+    assert!(bob.lock_template(lock_psbt(spk, v_lock), &addr(3)).is_err());
 }

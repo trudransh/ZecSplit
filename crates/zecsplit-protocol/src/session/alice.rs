@@ -52,6 +52,9 @@ impl AliceSession {
 
     /// §3.5-R1, §3.5-R2: rebuilds the four spends from Bob's `tx_lock`, then signs the cancel and adaptor-signs the refund.
     pub fn on_lock_template(&mut self, tpl: &LockTemplate) -> Result<SetupSigsAlice, SessionError> {
+        if self.core.seen("lock_template", tpl)? {
+            return self.setup_sigs();
+        }
         let params = self.core.btc_params(&tpl.refund_addr)?;
         let psbt: Psbt = tpl
             .psbt_base64
@@ -89,6 +92,9 @@ impl AliceSession {
 
     /// §3.5-R3, §3.5-R4: verifies Bob's cancel and punish signatures.
     pub fn on_setup_sigs_bob(&mut self, msg: &SetupSigsBob) -> Result<(), SessionError> {
+        if self.core.seen("setup_sigs_bob", msg)? {
+            return Ok(());
+        }
         let k_b = self.core.peer_btc_pk()?;
         let (_, d) = self.txs()?;
         let cancel = sig_from(&msg.sig_cancel, "sig_B(tx_cancel)")?;
@@ -106,6 +112,9 @@ impl AliceSession {
 
     /// §4.4-R2: verifies `esig_B(tx_redeem; Y_a)`.
     pub fn on_encsig(&mut self, msg: &RedeemEncSig) -> Result<(), SessionError> {
+        if self.core.seen("encsig", msg)? {
+            return Ok(());
+        }
         let esig = encsig_from_bytes(&msg.esig_redeem)
             .ok_or(SessionError::BadSignature("esig_B(tx_redeem)"))?;
         let (_, d) = self.txs()?;
