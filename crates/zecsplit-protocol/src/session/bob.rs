@@ -9,8 +9,10 @@ use zecsplit_btc::sign::{sign, verify, witness};
 use zecsplit_btc::txs::{SwapTxs, build_txs, lock_script_pubkey, lock_value};
 use zecsplit_crypto::Ask;
 
+use super::persist::parse;
 use super::{Core, Digests, SessionError, digests, recover_share};
 use crate::messages::{LockTemplate, RedeemEncSig, SetupSigsAlice, SetupSigsBob};
+use crate::recovery::RecoveryBundle;
 
 /// Bob's per-swap state beyond commit-reveal.
 pub struct BobSession {
@@ -66,12 +68,14 @@ impl BobSession {
             .ok_or(SessionError::Template("no W output".into()))?;
         let d = digests(&txs)?;
         self.txs = Some((txs, d));
-        Ok(LockTemplate {
+        let tpl = LockTemplate {
             psbt_base64,
             lock_vout,
             v_lock_sats: v_lock.to_sat(),
             refund_addr: refund_addr.to_string(),
-        })
+        };
+        self.core.record("lock_template", &tpl)?;
+        Ok(tpl)
     }
 
     /// §3.5-R4, §3.5-R5: verifies Alice's cancel sig and refund adaptor sig, then returns Bob's cancel and punish sigs.
@@ -98,6 +102,7 @@ impl BobSession {
         };
         self.sig_a_cancel = Some(cancel);
         self.esig_a_refund = Some(esig);
+        self.core.record("setup_sigs_alice", msg)?;
         Ok(reply)
     }
 
@@ -119,6 +124,7 @@ impl BobSession {
             esig_redeem: encsig_to_bytes(&esig),
         };
         self.esig_b_redeem = Some(esig);
+        self.core.record("encsig", &msg)?;
         Ok(msg)
     }
 
@@ -174,5 +180,41 @@ impl BobSession {
             &sign(&self.core.own_btc_sk()?, &d.refund),
         );
         Ok(tx)
+    }
+}
+
+impl BobSession {
+    /// §6.4: Bob's saved session; his DB keeps `esig_B(tx_redeem)` through the replay log.
+    pub fn save(&self, maker_endpoint: &str) -> Result<RecoveryBundle, SessionError> {
+        self.core.bundle(maker_endpoint, Vec::new())
+    }
+
+    /// §6.3-R2: rebuilds the session by replaying every saved input through the same checks.
+    pub fn restore(bundle: RecoveryBundle) -> Result<Self, SessionError> {
+        let (core, blobs) = Core::restored(bundle)?;
+        let mut s = BobSession::new(core);
+        for (name, bytes) in &blobs {
+            if s.core.replay(name, bytes)? {
+                continue;
+            }
+            match name.as_str() {
+                "lock_template" => {
+                    let tpl: LockTemplate = parse(bytes)?;
+                    let psbt: Psbt = tpl
+                        .psbt_base64
+                        .parse()
+                        .map_err(|_| SessionError::Template("saved PSBT".into()))?;
+                    s.lock_template(psbt, &tpl.refund_addr)?;
+                }
+                "setup_sigs_alice" => {
+                    s.on_setup_sigs_alice(&parse(bytes)?)?;
+                }
+                "encsig" => {
+                    s.encsig()?;
+                }
+                _ => {}
+            }
+        }
+        Ok(s)
     }
 }

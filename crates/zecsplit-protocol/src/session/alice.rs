@@ -9,8 +9,14 @@ use zecsplit_btc::sign::{sign, verify, witness};
 use zecsplit_btc::txs::{SwapTxs, build_txs, lock_value};
 use zecsplit_crypto::Ask;
 
+use super::persist::parse;
 use super::{Core, Digests, SessionError, digests, recover_share};
 use crate::messages::{LockTemplate, RedeemEncSig, SetupSigsAlice, SetupSigsBob};
+use crate::recovery::{
+    ESIG_A_REFUND, RecoveryBundle, SIG_B_CANCEL, SIG_B_PUNISH, TX_CANCEL, TX_LOCK, TX_PUNISH,
+    TX_REDEEM, TX_REFUND,
+};
+use bitcoin::consensus::encode::serialize;
 
 /// Alice's per-swap state beyond commit-reveal.
 pub struct AliceSession {
@@ -68,6 +74,7 @@ impl AliceSession {
         };
         self.esig_a_refund = Some(esig);
         self.txs = Some((txs, d));
+        self.core.record("lock_template", tpl)?;
         Ok(msg)
     }
 
@@ -85,7 +92,7 @@ impl AliceSession {
         }
         self.sig_b_cancel = Some(cancel);
         self.sig_b_punish = Some(punish);
-        Ok(())
+        self.core.record("setup_sigs_bob", msg)
     }
 
     /// §4.4-R2: verifies `esig_B(tx_redeem; Y_a)`.
@@ -102,7 +109,7 @@ impl AliceSession {
             return Err(SessionError::BadSignature("esig_B(tx_redeem)"));
         }
         self.esig_b_redeem = Some(esig);
-        Ok(())
+        self.core.record("encsig", msg)
     }
 
     /// The four pre-signed spends, once the lock template is in.
@@ -180,5 +187,55 @@ impl AliceSession {
             "tx_refund",
         )?;
         self.core.ask_with(&s_b)
+    }
+}
+
+impl AliceSession {
+    /// §6.4-R1: the recovery bundle, with the templates and Bob's signatures the spec requires.
+    pub fn save(&self, maker_endpoint: &str) -> Result<RecoveryBundle, SessionError> {
+        let mut extra = Vec::new();
+        if let Some((txs, _)) = &self.txs {
+            extra.push((TX_LOCK.to_string(), txs.lock.serialize()));
+            for (name, tx) in [
+                (TX_REDEEM, &txs.redeem),
+                (TX_CANCEL, &txs.cancel),
+                (TX_REFUND, &txs.refund),
+                (TX_PUNISH, &txs.punish),
+            ] {
+                extra.push((name.to_string(), serialize(tx)));
+            }
+        }
+        for (name, sig) in [
+            (SIG_B_CANCEL, self.sig_b_cancel),
+            (SIG_B_PUNISH, self.sig_b_punish),
+        ] {
+            if let Some(s) = sig {
+                extra.push((name.to_string(), s.serialize_compact().to_vec()));
+            }
+        }
+        if let Some(e) = &self.esig_a_refund {
+            extra.push((ESIG_A_REFUND.to_string(), encsig_to_bytes(e)));
+        }
+        self.core.bundle(maker_endpoint, extra)
+    }
+
+    /// §6.3-R2, §6.4: rebuilds the session by replaying every saved input through the same checks.
+    pub fn restore(bundle: RecoveryBundle) -> Result<Self, SessionError> {
+        let (core, blobs) = Core::restored(bundle)?;
+        let mut s = AliceSession::new(core);
+        for (name, bytes) in &blobs {
+            if s.core.replay(name, bytes)? {
+                continue;
+            }
+            match name.as_str() {
+                "lock_template" => {
+                    s.on_lock_template(&parse(bytes)?)?;
+                }
+                "setup_sigs_bob" => s.on_setup_sigs_bob(&parse(bytes)?)?,
+                "encsig" => s.on_encsig(&parse(bytes)?)?,
+                _ => {}
+            }
+        }
+        Ok(s)
     }
 }
