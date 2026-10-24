@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use zecsplit_crypto::rand_core::{OsRng, RngCore};
 use zecsplit_crypto::{MakerSecret, Role, maker_public_key};
+use zecsplit_protocol::machine::terms;
 use zecsplit_protocol::messages::{
     Envelope, ErrorBody, Message, Network, PROTOCOL_VERSION, Quote, QuoteRequest, SignedQuote,
 };
@@ -25,15 +26,6 @@ pub struct Config {
     pub btc_fee_rate: u64,
     pub endpoint: String,
     pub passphrase: SecretString,
-}
-
-/// §8: timelocks and confirmations per network, as `(t1, t2, n_conf_btc, n_conf_zec, redeem_margin)`.
-fn timings(network: Network) -> Option<(u16, u16, u16, u16, u16)> {
-    match network {
-        Network::Regtest => Some((20, 20, 1, 1, 5)),
-        Network::Test => Some((36, 36, 1, 5, 12)),
-        Network::MainBeta => None,
-    }
 }
 
 /// §4.3-R4: outside regtest the lock check must run on the maker's own node, reached over loopback.
@@ -141,8 +133,7 @@ impl Service {
         if self.runners.values().filter(|r| r.in_setup()).count() >= MAX_SETUPS {
             return Err("busy: too many swaps in setup, try again shortly".into());
         }
-        let (t1, t2, n_conf_btc, n_conf_zec, redeem_margin) =
-            timings(req.network).ok_or("network not served")?;
+        let terms = terms(req.network).ok_or("network not served")?;
         let btc_amount = u64::try_from(
             u128::from(req.zec_amount) * u128::from(self.config.sats_per_zec) / 100_000_000,
         )
@@ -156,11 +147,11 @@ impl Service {
             zec_amount: req.zec_amount,
             btc_amount,
             btc_fee_rate: self.config.btc_fee_rate,
-            t1,
-            t2,
-            n_conf_btc,
-            n_conf_zec,
-            redeem_margin,
+            t1: terms.t1,
+            t2: terms.t2,
+            n_conf_btc: terms.n_conf_btc,
+            n_conf_zec: terms.n_conf_zec,
+            redeem_margin: terms.redeem_margin,
             expires_at: u64::try_from(now()).map_err(|e| e.to_string())? + 60,
         };
         let refund = self.ports.wallet.refund_address().await?;
