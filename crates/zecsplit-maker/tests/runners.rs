@@ -699,7 +699,7 @@ async fn t_034_engine_api_runs_s_01_and_never_returns_a_secret() {
     );
 }
 
-/// ADV-08: quote spam holds at most `MAX_SETUPS` slots, and a stalled setup expires.
+/// ADV-08: quote spam holds at most the §8 swap slots, and a stalled setup expires.
 #[tokio::test(flavor = "multi_thread")]
 async fn adv_08_quote_flood_is_capped_and_stalled_setups_expire() {
     let chain: &'static FakeChain = Box::leak(Box::default());
@@ -729,7 +729,7 @@ async fn adv_08_quote_flood_is_capped_and_stalled_setups_expire() {
         zec_amount: 10_000_000,
         network: Network::Regtest,
     };
-    for _ in 0..zecsplit_maker::service::MAX_SETUPS {
+    for _ in 0..zecsplit_maker::service::max_swaps(Network::Regtest) {
         assert!(matches!(svc.quote(&req).await.message, Message::Quote(_)));
     }
     assert!(matches!(svc.quote(&req).await.message, Message::Error(_)));
