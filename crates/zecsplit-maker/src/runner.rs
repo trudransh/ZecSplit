@@ -72,9 +72,12 @@ pub struct BobRunner {
     endpoint: String,
     outbox: VecDeque<Message>,
     pub alerts: Vec<Alert>,
+    started_at: i64,
 }
 
 const ZEC_SWEEP: &str = "zec_sweep";
+/// ADR-033: seconds a taker has to finish setup before Bob drops the swap with nothing locked.
+pub const SETUP_TIMEOUT_SECS: i64 = 600;
 
 fn json<T: serde::Serialize>(v: &T) -> Result<String, RunnerError> {
     serde_json::to_string(v).map_err(|e| RunnerError::Saved(e.to_string()))
@@ -111,6 +114,7 @@ impl BobRunner {
             endpoint: endpoint.to_string(),
             outbox: VecDeque::new(),
             alerts: Vec::new(),
+            started_at: now,
         })
     }
 
@@ -140,6 +144,7 @@ impl BobRunner {
             endpoint,
             outbox: VecDeque::new(),
             alerts: Vec::new(),
+            started_at: row.created_at,
         }))
     }
 
@@ -202,13 +207,28 @@ impl BobRunner {
         Ok(())
     }
 
-    /// One tick: step on a fresh chain snapshot.
+    /// Nothing is on chain yet, so a stalled taker costs Bob nothing but a slot.
+    pub fn in_setup(&self) -> bool {
+        matches!(
+            self.state,
+            BobState::Quoted | BobState::Committed | BobState::Revealed
+        )
+    }
+
+    /// One tick: the setup timer before the lock, a fresh chain snapshot after it.
     pub async fn tick(
         &mut self,
         store: &mut Store,
         ports: &Ports<'_>,
         now: i64,
     ) -> Result<(), RunnerError> {
+        if self.in_setup() {
+            if now - self.started_at >= SETUP_TIMEOUT_SECS {
+                self.feed(store, ports, BobInput::SetupTimedOut, now)
+                    .await?;
+            }
+            return Ok(());
+        }
         let view = self.view(store, ports).await?;
         self.feed(store, ports, BobInput::Chain(view), now).await
     }

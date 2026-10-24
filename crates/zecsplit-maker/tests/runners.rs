@@ -19,7 +19,7 @@ use zecsplit_maker::runner::{self as bob, BobRunner, Wallet, ZecNode};
 use zecsplit_protocol::alice::{AliceInput, AliceState};
 use zecsplit_protocol::bob::{BobInput, BobState};
 use zecsplit_protocol::machine::{AbortReason, Alert, Outcome, ZecLock};
-use zecsplit_protocol::messages::{Envelope, Network, Quote};
+use zecsplit_protocol::messages::{Envelope, Message, Network, Quote};
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_protocol::session::bob::BobSession;
 use zecsplit_protocol::session::{Core, Shared};
@@ -687,4 +687,53 @@ async fn t_034_engine_api_runs_s_01_and_never_returns_a_secret() {
         restored["outcome"], "redeemed",
         "the chain says how it ended: {restored}"
     );
+}
+
+/// ADV-08: quote spam holds at most `MAX_SETUPS` slots, and a stalled setup expires.
+#[tokio::test(flavor = "multi_thread")]
+async fn adv_08_quote_flood_is_capped_and_stalled_setups_expire() {
+    let chain: &'static FakeChain = Box::leak(Box::default());
+    let zec: &'static FakeZcash = Box::leak(Box::default());
+    let sources: &'static [&'static dyn BtcSource] =
+        Box::leak(Box::new([chain as &dyn BtcSource, chain]));
+    let ports = || bob::Ports {
+        sources,
+        broadcast: chain,
+        wallet: &FakeWallet,
+        zec,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let config = MakerConfig {
+        network: Network::Regtest,
+        sats_per_zec: 500_000,
+        min_zec: 1_000_000,
+        max_zec: 200_000_000,
+        btc_fee_rate: 2,
+        endpoint: "http://maker".into(),
+        passphrase: pass(),
+    };
+    let store = Store::open(&dir.path().join("maker.sqlite")).unwrap();
+    let mut svc =
+        Service::open(config, MakerSecret::from_bytes([0x11; 32]), store, ports()).unwrap();
+    let req = zecsplit_protocol::messages::QuoteRequest {
+        zec_amount: 10_000_000,
+        network: Network::Regtest,
+    };
+    for _ in 0..zecsplit_maker::service::MAX_SETUPS {
+        assert!(matches!(svc.quote(&req).await.message, Message::Quote(_)));
+    }
+    assert!(matches!(svc.quote(&req).await.message, Message::Error(_)));
+
+    let mut store = Store::open(&dir.path().join("other.sqlite")).unwrap();
+    let b = Core::new(&mut OsRng, quote(), Role::Bob, addr(2)).unwrap();
+    let mut runner =
+        BobRunner::start(&mut store, BobSession::new(b), pass(), "http://maker", 0).unwrap();
+    let timeout = bob::SETUP_TIMEOUT_SECS;
+    runner
+        .tick(&mut store, &ports(), timeout - 1)
+        .await
+        .unwrap();
+    assert_eq!(runner.state, BobState::Quoted);
+    runner.tick(&mut store, &ports(), timeout).await.unwrap();
+    assert_eq!(runner.state, BobState::Aborted(AbortReason::NoLock));
 }
