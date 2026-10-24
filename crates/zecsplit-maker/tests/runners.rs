@@ -18,7 +18,7 @@ use zecsplit_crypto::{Ask, Role};
 use zecsplit_maker::runner::{self as bob, BobRunner, Wallet, ZecNode};
 use zecsplit_protocol::alice::{AliceInput, AliceState};
 use zecsplit_protocol::bob::{BobInput, BobState};
-use zecsplit_protocol::machine::{Outcome, ZecLock};
+use zecsplit_protocol::machine::{Alert, Outcome, ZecLock};
 use zecsplit_protocol::messages::{Network, Quote};
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_protocol::session::bob::BobSession;
@@ -75,6 +75,24 @@ impl Broadcast for FakeChain {
     }
 }
 
+/// Bob's line to `FakeChain` that, when `blocked`, carries only his `tx_lock` (ADV-07).
+struct Censor<'a> {
+    chain: &'a FakeChain,
+    blocked: bool,
+    lock: Mutex<Option<Txid>>,
+}
+
+#[async_trait]
+impl Broadcast for Censor<'_> {
+    async fn broadcast(&self, tx: &Transaction) -> Result<(), SourceError> {
+        let txid = tx.compute_txid();
+        if self.blocked && *self.lock.lock().unwrap().get_or_insert(txid) != txid {
+            return Ok(());
+        }
+        self.chain.broadcast(tx).await
+    }
+}
+
 struct FakeWallet;
 
 #[async_trait]
@@ -90,10 +108,12 @@ impl Wallet for FakeWallet {
     }
 }
 
-/// One Zcash chain both parties see; `bob_blind` hides the lock from Bob (S-04).
+/// One Zcash chain both parties see; `bob_blind` hides the lock from Bob (S-04), `wrong_amount` mispays it (ADV-05), `bob_delay` shows it to Bob only at that many confirmations (ADV-06).
 #[derive(Default)]
 struct FakeZcash {
     bob_blind: bool,
+    wrong_amount: bool,
+    bob_delay: u32,
     paid: Mutex<Option<u32>>,
     sweeps: Mutex<Vec<(&'static str, bool, u32)>>,
 }
@@ -137,7 +157,10 @@ impl ZecSweep for FakeZcash {
 impl ZecNode for FakeZcash {
     async fn lock(&self, _: &Shared, _: u64, _: u32) -> Result<ZecLock, String> {
         Ok(match *self.paid.lock().unwrap() {
-            Some(confirmations) if !self.bob_blind => ZecLock::Correct { confirmations },
+            Some(_) if self.wrong_amount => ZecLock::WrongAmount,
+            Some(confirmations) if !self.bob_blind && confirmations >= self.bob_delay => {
+                ZecLock::Correct { confirmations }
+            }
             _ => ZecLock::Unseen,
         })
     }
@@ -203,8 +226,17 @@ fn signs_for(ask: &Ask, shared: &Shared) -> bool {
 }
 
 /// Runs one swap to the end; `restart` rebuilds each runner from SQLite before every tick once it is saved (S-07).
-async fn swap(zec: &FakeZcash, restart: bool) -> (AliceState, BobState) {
+async fn swap(
+    zec: &FakeZcash,
+    restart: bool,
+    bob_blocked: bool,
+) -> (AliceState, BobState, Vec<Alert>) {
     let chain = FakeChain::default();
+    let censor = Censor {
+        chain: &chain,
+        blocked: bob_blocked,
+        lock: Mutex::new(None),
+    };
     let sources: [&dyn BtcSource; 2] = [&chain, &chain];
     let dirs = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let mut store_a = Store::open(&dirs.0.path().join("engine.sqlite")).unwrap();
@@ -217,7 +249,7 @@ async fn swap(zec: &FakeZcash, restart: bool) -> (AliceState, BobState) {
         bob: tokio::sync::Mutex::new((bob_runner, store_b)),
         ports: bob::Ports {
             sources: &sources,
-            broadcast: &chain,
+            broadcast: &censor,
             wallet: &FakeWallet,
             zec,
         },
@@ -284,7 +316,7 @@ async fn swap(zec: &FakeZcash, restart: bool) -> (AliceState, BobState) {
         zec.mine();
     }
     let bob_state = link.bob.lock().await.0.state;
-    (alice.state, bob_state)
+    (alice.state, bob_state, alice.alerts)
 }
 
 fn swept(zec: &FakeZcash) -> Vec<(&'static str, bool)> {
@@ -295,9 +327,9 @@ fn swept(zec: &FakeZcash) -> Vec<(&'static str, bool)> {
 #[tokio::test(flavor = "multi_thread")]
 async fn s_01_engine_and_maker_runners_swap() {
     let zec = FakeZcash::default();
-    let states = swap(&zec, false).await;
+    let (alice, bob, _) = swap(&zec, false, false).await;
     assert_eq!(
-        states,
+        (alice, bob),
         (
             AliceState::Done(Outcome::Swapped),
             BobState::Done(Outcome::Swapped)
@@ -312,9 +344,9 @@ async fn s_04_maker_never_sees_zec_both_refund() {
         bob_blind: true,
         ..FakeZcash::default()
     };
-    let states = swap(&zec, false).await;
+    let (alice, bob, _) = swap(&zec, false, false).await;
     assert_eq!(
-        states,
+        (alice, bob),
         (
             AliceState::Done(Outcome::Refunded),
             BobState::Done(Outcome::Refunded)
@@ -324,11 +356,63 @@ async fn s_04_maker_never_sees_zec_both_refund() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn adv_05_wrong_zec_amount_gets_no_enc_sig_and_both_refund() {
+    let zec = FakeZcash {
+        wrong_amount: true,
+        ..FakeZcash::default()
+    };
+    let (alice, bob, _) = swap(&zec, false, false).await;
+    assert_eq!(
+        (alice, bob),
+        (
+            AliceState::Done(Outcome::Refunded),
+            BobState::Done(Outcome::Refunded)
+        )
+    );
+    assert_eq!(swept(&zec), [("alice", true)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adv_06_enc_sig_inside_the_margin_is_not_redeemed_and_both_refund() {
+    let zec = FakeZcash {
+        bob_delay: 15,
+        ..FakeZcash::default()
+    };
+    let (alice, bob, alerts) = swap(&zec, false, false).await;
+    assert_eq!(
+        (alice, bob),
+        (
+            AliceState::Done(Outcome::Refunded),
+            BobState::Done(Outcome::Refunded)
+        )
+    );
+    assert!(alerts.contains(&Alert::MarginTooSmall));
+    assert_eq!(swept(&zec), [("alice", true)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adv_07_blocked_maker_refund_lets_alice_punish_at_t2() {
+    let zec = FakeZcash {
+        bob_blind: true,
+        ..FakeZcash::default()
+    };
+    let (alice, bob, _) = swap(&zec, false, true).await;
+    assert_eq!(
+        (alice, bob),
+        (
+            AliceState::Done(Outcome::Punished),
+            BobState::Done(Outcome::Punished)
+        )
+    );
+    assert_eq!(swept(&zec), []);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn s_07_both_runners_restart_before_every_tick() {
     let zec = FakeZcash::default();
-    let states = swap(&zec, true).await;
+    let (alice, bob, _) = swap(&zec, true, false).await;
     assert_eq!(
-        states,
+        (alice, bob),
         (
             AliceState::Done(Outcome::Swapped),
             BobState::Done(Outcome::Swapped)

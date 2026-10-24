@@ -356,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn spec_5_3_r5_bob_refunds_within_one_block() {
+    fn spec_5_3_r5_bob_refunds_within_one_block_adv_07() {
         let mut v = view(121);
         v.cancel = TxStatus::Confirmed { height: 121 };
         assert_eq!(
