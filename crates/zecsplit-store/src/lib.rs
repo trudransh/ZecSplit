@@ -55,6 +55,8 @@ pub struct SwapRow {
     pub state_json: String,
     pub t1_height: u32,
     pub t2_height: u32,
+    /// Unix seconds.
+    pub created_at: i64,
 }
 
 /// A stored transaction and what is known about it.
@@ -183,10 +185,19 @@ impl Store {
 
     /// §6.3-R2: every non-terminal swap, oldest first, for resume on start.
     pub fn active_swaps(&self) -> Result<Vec<SwapRow>, StoreError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, role, network, quote_json, state, deadline_t1_height, deadline_t2_height
-             FROM swaps WHERE done = 0 ORDER BY created_at, id",
-        )?;
+        self.swaps_where("done = 0 ORDER BY created_at, id")
+    }
+
+    /// Every swap, newest first, for the engine's swap list.
+    pub fn swaps(&self) -> Result<Vec<SwapRow>, StoreError> {
+        self.swaps_where("1 ORDER BY created_at DESC, id")
+    }
+
+    fn swaps_where(&self, clause: &str) -> Result<Vec<SwapRow>, StoreError> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT id, role, network, quote_json, state, deadline_t1_height, deadline_t2_height,
+               created_at FROM swaps WHERE {clause}"
+        ))?;
         let rows = stmt.query_map([], |r| {
             Ok(SwapRow {
                 id: id_from(r.get(0)?)?,
@@ -196,6 +207,7 @@ impl Store {
                 state_json: r.get(4)?,
                 t1_height: r.get(5)?,
                 t2_height: r.get(6)?,
+                created_at: r.get(7)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
