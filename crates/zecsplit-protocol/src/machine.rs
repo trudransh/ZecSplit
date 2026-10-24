@@ -2,7 +2,7 @@
 
 use zecsplit_btc::sources::{Agreement, SwapStatus};
 
-use crate::messages::Quote;
+use crate::messages::{Network, Quote};
 
 /// Quote constants the machines need (§2, §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +97,39 @@ pub enum Alert {
     PeerMisbehavedAfterLock,
 }
 
+/// §8 fee floor, and the ceiling a taker accepts so fees can't eat her BTC (ADR-049).
+pub const FEE_RATE_RANGE: std::ops::RangeInclusive<u64> = 2..=100;
+
+/// §8: the timelocks and confirmations per network; `None` where swaps are cut (ADR-025).
+pub fn terms(network: Network) -> Option<Params> {
+    let (t1, t2, n_conf_btc, n_conf_zec, redeem_margin) = match network {
+        Network::Regtest => (20, 20, 1, 1, 5),
+        Network::Test => (36, 36, 1, 5, 12),
+        Network::MainBeta => return None,
+    };
+    Some(Params {
+        t1,
+        t2,
+        n_conf_btc,
+        n_conf_zec,
+        redeem_margin,
+    })
+}
+
+/// §8: a quote's terms are exactly its network's, with a fee rate in `FEE_RATE_RANGE`.
+pub fn check_terms(q: &Quote) -> Result<(), String> {
+    if terms(q.network) != Some(Params::from(q)) {
+        return Err("timelocks or confirmations differ from §8".into());
+    }
+    if !FEE_RATE_RANGE.contains(&q.btc_fee_rate) {
+        return Err(format!(
+            "fee rate {} sat/vB outside {FEE_RATE_RANGE:?}",
+            q.btc_fee_rate
+        ));
+    }
+    Ok(())
+}
+
 impl From<&Quote> for Params {
     fn from(q: &Quote) -> Self {
         Params {
@@ -164,5 +197,46 @@ impl ChainView {
     pub(crate) fn with_zec(mut self, z: ZecLock) -> Self {
         self.zec_lock = z;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn quote(network: Network) -> Quote {
+        let p = terms(Network::Regtest).unwrap();
+        Quote {
+            protocol_version: 1,
+            swap_id: [7; 32],
+            network,
+            zec_amount: 100_000_000,
+            btc_amount: 150_000,
+            btc_fee_rate: 2,
+            t1: p.t1,
+            t2: p.t2,
+            n_conf_btc: p.n_conf_btc,
+            n_conf_zec: p.n_conf_zec,
+            redeem_margin: p.redeem_margin,
+            expires_at: u64::MAX,
+        }
+    }
+
+    #[test]
+    fn spec_8_taker_accepts_only_the_networks_terms() {
+        assert_eq!(check_terms(&quote(Network::Regtest)), Ok(()));
+        assert!(check_terms(&quote(Network::Test)).is_err());
+        assert!(check_terms(&quote(Network::MainBeta)).is_err());
+        let mut long = quote(Network::Regtest);
+        long.t1 = u16::MAX;
+        assert!(check_terms(&long).is_err());
+        let mut thin = quote(Network::Regtest);
+        thin.redeem_margin = 0;
+        assert!(check_terms(&thin).is_err());
+        for fee in [0, 1, 101, u64::MAX] {
+            let mut q = quote(Network::Regtest);
+            q.btc_fee_rate = fee;
+            assert!(check_terms(&q).is_err(), "{fee}");
+        }
     }
 }

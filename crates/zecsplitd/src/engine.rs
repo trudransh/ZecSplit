@@ -10,7 +10,9 @@ use bitcoin::base64::engine::general_purpose::STANDARD as BASE64;
 use zecsplit_crypto::Role;
 use zecsplit_crypto::rand_core::OsRng;
 use zecsplit_protocol::alice::{AliceInput, AliceState};
-use zecsplit_protocol::machine::{AbortReason, Alert, ChainView, Outcome as End, TxStatus};
+use zecsplit_protocol::machine::{
+    AbortReason, Alert, ChainView, Outcome as End, TxStatus, check_terms,
+};
 use zecsplit_protocol::messages::{self as wire, Quote};
 use zecsplit_protocol::recovery::{SecretString, open, seal};
 use zecsplit_protocol::session::Core;
@@ -320,6 +322,14 @@ impl Engine {
             .verify(&self.config.maker_key, now)
             .map_err(|e| refuse(StatusCode::BAD_GATEWAY, "bad_quote", e))?
             .clone();
+        if quote.network != self.config.network || quote.zec_amount != zec_amount {
+            return Err(refuse(
+                StatusCode::BAD_GATEWAY,
+                "bad_quote",
+                "not the quote asked for",
+            ));
+        }
+        check_terms(&quote).map_err(|e| refuse(StatusCode::BAD_GATEWAY, "bad_quote", e))?;
         let opens = estimate(now, 0, u32::from(quote.n_conf_btc) + u32::from(quote.t1));
         let view = QuoteView {
             quote_id: hex::encode(quote.swap_id),
