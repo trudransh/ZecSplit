@@ -69,10 +69,13 @@ pub struct AliceRunner {
     pub alerts: Vec<Alert>,
     /// The chain snapshot of the last tick, for the UI's confirmation counts.
     pub last_view: Option<ChainView>,
+    started_at: i64,
 }
 
 const ZEC_SWEEP: &str = "zec_sweep";
 const MAX_MESSAGES_PER_TICK: usize = 8;
+/// ADR-033 (S-02): seconds Alice waits for a confirmed `tx_lock` before she aborts with nothing paid.
+pub const LOCK_TIMEOUT_SECS: i64 = 3600;
 
 fn json<T: serde::Serialize>(v: &T) -> Result<String, RunnerError> {
     serde_json::to_string(v).map_err(|e| RunnerError::Saved(e.to_string()))
@@ -128,6 +131,7 @@ impl AliceRunner {
             payment_request: None,
             alerts: Vec::new(),
             last_view: None,
+            started_at: now,
         })
     }
 
@@ -158,6 +162,7 @@ impl AliceRunner {
             payment_request: None,
             alerts: Vec::new(),
             last_view: None,
+            started_at: row.created_at,
         }))
     }
 
@@ -235,7 +240,13 @@ impl AliceRunner {
         }
         let view = self.view(store, ports).await?;
         self.last_view = Some(view);
-        self.feed(store, ports, AliceInput::Chain(view), now).await
+        self.feed(store, ports, AliceInput::Chain(view), now)
+            .await?;
+        if now - self.started_at >= LOCK_TIMEOUT_SECS {
+            self.feed(store, ports, AliceInput::LockTimedOut, now)
+                .await?;
+        }
+        Ok(())
     }
 
     /// Where the BTC goes.
