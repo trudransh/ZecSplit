@@ -48,11 +48,10 @@ async fn run() -> Result<(), String> {
         var("ZECSPLIT_MAKER_RPC_PASS")?,
     );
     let rpc = |path: &str| BitcoindRpc::new(&format!("{node}{path}"), &user, &pass);
-    let source_a: &'static BitcoindRpc = Box::leak(Box::new(rpc("").map_err(|e| e.to_string())?));
-    let source_b: &'static BitcoindRpc = Box::leak(Box::new(rpc("").map_err(|e| e.to_string())?));
+    let node_rpc: &'static BitcoindRpc = Box::leak(Box::new(rpc("").map_err(|e| e.to_string())?));
     let sources: &'static [&'static dyn BtcSource] = Box::leak(Box::new([
-        source_a as &dyn BtcSource,
-        source_b as &dyn BtcSource,
+        node_rpc as &dyn BtcSource,
+        node_rpc as &dyn BtcSource,
     ]));
     let wallet = Box::leak(Box::new(BitcoindWallet::new(
         rpc(&format!("/wallet/{}", var("ZECSPLIT_MAKER_WALLET")?)).map_err(|e| e.to_string())?,
@@ -66,7 +65,7 @@ async fn run() -> Result<(), String> {
     )));
     let ports = Ports {
         sources,
-        broadcast: source_a,
+        broadcast: node_rpc,
         wallet,
         zec,
     };

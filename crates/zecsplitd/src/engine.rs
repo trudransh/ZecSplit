@@ -15,8 +15,8 @@ use zecsplit_protocol::machine::{
 };
 use zecsplit_protocol::messages::{self as wire, Quote};
 use zecsplit_protocol::recovery::{SecretString, open, seal};
-use zecsplit_protocol::session::Core;
 use zecsplit_protocol::session::alice::AliceSession;
+use zecsplit_protocol::session::{Core, btc_network};
 use zecsplit_store::{NewSwap, Store, SwapRow, TxRow};
 
 use crate::api::{
@@ -95,14 +95,6 @@ fn api_network(n: wire::Network) -> Network {
         wire::Network::Regtest => Network::Regtest,
         wire::Network::Test => Network::Test,
         wire::Network::MainBeta => Network::MainBeta,
-    }
-}
-
-fn btc_network(n: wire::Network) -> bitcoin::Network {
-    match n {
-        wire::Network::Regtest => bitcoin::Network::Regtest,
-        wire::Network::Test => bitcoin::Network::Signet,
-        wire::Network::MainBeta => bitcoin::Network::Bitcoin,
     }
 }
 
