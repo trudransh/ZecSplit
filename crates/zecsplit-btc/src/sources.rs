@@ -286,6 +286,21 @@ impl Broadcast for BitcoindRpc {
     }
 }
 
+/// The largest Esplora body read: a hex-encoded 4 MB transaction.
+const MAX_BODY: usize = 8 * 1024 * 1024;
+
+/// A third party's body as text, refused past `MAX_BODY` so it can't exhaust memory.
+async fn capped(mut res: reqwest::Response) -> Result<String, SourceError> {
+    let mut out = Vec::new();
+    while let Some(chunk) = res.chunk().await? {
+        if out.len() + chunk.len() > MAX_BODY {
+            return Err(bad("response too large"));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    String::from_utf8(out).map_err(bad)
+}
+
 /// An Esplora REST endpoint (plain HTTP until T-025 adds TLS).
 pub struct Esplora {
     http: reqwest::Client,
@@ -319,7 +334,7 @@ impl Esplora {
 impl BtcSource for Esplora {
     async fn tip(&self) -> Result<u32, SourceError> {
         let res = self.get("/blocks/tip/height").await?;
-        let body = res.ok_or_else(|| bad("no tip"))?.text().await?;
+        let body = capped(res.ok_or_else(|| bad("no tip"))?).await?;
         body.trim().parse().map_err(bad)
     }
 
@@ -327,9 +342,11 @@ impl BtcSource for Esplora {
         let Some(res) = self.get(&format!("/tx/{txid}/hex")).await? else {
             return Ok(None);
         };
-        let tx = deserialize_hex(res.text().await?.trim()).map_err(bad)?;
+        let tx = deserialize_hex(capped(res).await?.trim()).map_err(bad)?;
         let res = self.get(&format!("/tx/{txid}/status")).await?;
-        let status: EsploraStatus = res.ok_or_else(|| bad("no status"))?.json().await?;
+        let status: EsploraStatus =
+            serde_json::from_str(&capped(res.ok_or_else(|| bad("no status"))?).await?)
+                .map_err(bad)?;
         let height = status.block_height.filter(|_| status.confirmed);
         Ok(Some(SourceTx { tx, height }))
     }
@@ -348,7 +365,7 @@ impl Broadcast for Esplora {
             if res.status().is_success() {
                 Ok(())
             } else {
-                Err(bad(res.text().await?))
+                Err(bad(capped(res).await?))
             }
         }
         .await;
@@ -367,6 +384,32 @@ mod tests {
     struct Fake {
         tip: u32,
         tx: Option<SourceTx>,
+    }
+
+    /// An HTTP server on loopback that answers once with a `len`-byte body of digits.
+    fn serve_once(len: usize) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            if let Ok((mut s, _)) = listener.accept() {
+                let _ = s.read(&mut [0; 4096]);
+                let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {len}\r\n\r\n");
+                let _ = s.write_all(head.as_bytes());
+                let _ = s.write_all(&vec![b'7'; len]);
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn oversized_esplora_bodies_are_refused() {
+        let big = Esplora::new(&serve_once(MAX_BODY + 1)).unwrap();
+        assert!(
+            matches!(big.tip().await, Err(SourceError::BadResponse(m)) if m == "response too large")
+        );
+        let ok = Esplora::new(&serve_once(3)).unwrap();
+        assert_eq!(ok.tip().await.unwrap(), 777);
     }
 
     #[async_trait]
