@@ -56,6 +56,9 @@ pub fn owned_lock_server(network: Network, url: &str) -> Result<(), String> {
     }
 }
 
+/// ADV-08: unfinished setups one maker holds at once; more quotes wait until one ends.
+pub const MAX_SETUPS: usize = 16;
+
 fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -135,6 +138,9 @@ impl Service {
         if req.zec_amount < self.config.min_zec || req.zec_amount > self.config.max_zec {
             return Err("amount outside the limits".into());
         }
+        if self.runners.values().filter(|r| r.in_setup()).count() >= MAX_SETUPS {
+            return Err("busy: too many swaps in setup, try again shortly".into());
+        }
         let (t1, t2, n_conf_btc, n_conf_zec, redeem_margin) =
             timings(req.network).ok_or("network not served")?;
         let btc_amount = u64::try_from(
@@ -196,13 +202,11 @@ impl Service {
     pub async fn tick(&mut self) -> Vec<String> {
         let mut failures = Vec::new();
         for (id, runner) in self.runners.iter_mut() {
-            if runner.state.is_terminal() {
-                continue;
-            }
             if let Err(e) = runner.tick(&mut self.store, &self.ports, now()).await {
                 failures.push(format!("{}: {e}", hex::encode(id)));
             }
         }
+        self.runners.retain(|_, r| !r.state.is_terminal());
         failures
     }
 }
