@@ -1,20 +1,21 @@
-//! G4 on the regtest devnet: S-01 three times in a row, engine and maker as separate processes over HTTP.
+//! G4 on the regtest devnet: S-01 three times in a row, engine and maker as separate processes over
+//! HTTP; then PRIV-01/02 on every Zcash transaction and PRIV-03 on every file both wrote.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::net::TcpListener;
 use std::path::Path;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use zecsplit_btc::sources::{BitcoindRpc, BtcSource};
 use zecsplit_crypto::rand_core::OsRng;
-use zecsplit_crypto::{MakerSecret, Role, maker_public_key};
+use zecsplit_crypto::{MakerSecret, Role, maker_public_key, shared_ask};
 use zecsplit_protocol::alice::{AliceInput, AliceState};
 use zecsplit_protocol::bob::BobState;
 use zecsplit_protocol::machine::Outcome;
 use zecsplit_protocol::messages::Network;
-use zecsplit_protocol::recovery::SecretString;
+use zecsplit_protocol::recovery::{SecretString, open};
 use zecsplit_protocol::session::Core;
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_store::Store;
@@ -62,7 +63,126 @@ impl Drop for MakerProcess {
     }
 }
 
+fn zebra(method: &str, params: &str) -> serde_json::Value {
+    let body = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":{params}}}"#);
+    let out = Command::new("curl")
+        .args([
+            "-s",
+            "-H",
+            "content-type: application/json",
+            "--data",
+            &body,
+        ])
+        .arg("http://127.0.0.1:18232")
+        .output()
+        .unwrap();
+    serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()["result"].clone()
+}
+
+fn zec_tip() -> u64 {
+    zebra("getblockcount", "[]").as_u64().unwrap()
+}
+
+/// PRIV-01, PRIV-02: every non-coinbase Zcash tx mined in `from..=to` is a plain 2-action
+/// Ironwood transaction with nothing transparent, Sapling or Sprout.
+fn assert_shielded_only(from: u64, to: u64) {
+    let mut seen = 0;
+    for h in from..=to {
+        let block = zebra("getblock", &format!(r#"["{h}",1]"#));
+        for txid in block["tx"].as_array().unwrap().iter().skip(1) {
+            let tx = zebra("getrawtransaction", &format!(r#"[{txid},1]"#));
+            for part in [
+                "vin",
+                "vout",
+                "vShieldedSpend",
+                "vShieldedOutput",
+                "vjoinsplit",
+            ] {
+                assert_eq!(
+                    tx[part].as_array().map_or(0, Vec::len),
+                    0,
+                    "PRIV-01 {txid} {part}"
+                );
+            }
+            assert_eq!(
+                tx["orchard"]["actions"].as_array().map_or(0, Vec::len),
+                0,
+                "{txid}"
+            );
+            assert_eq!(
+                tx["ironwood"]["actions"].as_array().unwrap().len(),
+                2,
+                "PRIV-02 {txid}"
+            );
+            seen += 1;
+        }
+    }
+    assert!(
+        seen >= 6,
+        "PRIV-01: expected a lock and a sweep per round, saw {seen}"
+    );
+}
+
+/// PRIV-03: no file under `dir` holds any secret, raw, hex or byte-reversed.
+fn assert_no_secret_on_disk(dir: &Path, secrets: &[[u8; 32]]) {
+    let mut needles = Vec::new();
+    for s in secrets {
+        let mut rev = *s;
+        rev.reverse();
+        for b in [s, &rev] {
+            needles.push(b.to_vec());
+            needles.push(hex::encode(b).into_bytes());
+            needles.push(hex::encode_upper(b).into_bytes());
+        }
+    }
+    let mut stack = vec![dir.to_path_buf()];
+    let mut files = 0;
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let bytes = std::fs::read(&path).unwrap();
+            for n in &needles {
+                assert!(
+                    !bytes.windows(n.len()).any(|w| w == n.as_slice()),
+                    "PRIV-03: a secret is in {}",
+                    path.display()
+                );
+            }
+            files += 1;
+        }
+    }
+    assert!(files >= 4, "PRIV-03 scanned only {files} files");
+}
+
+/// `s_a`, `k_a`, `s_b`, `k_b` and `ask` of one swap, from both sealed sessions.
+fn swap_secrets(engine: &Store, maker_db: &Path, id: &[u8; 32]) -> Vec<[u8; 32]> {
+    let sealed_a = engine.secret(id).unwrap().unwrap();
+    let pass_a = || SecretString::from("engine passphrase".to_owned());
+    let a = open(&sealed_a, pass_a()).unwrap();
+    let sigma = AliceSession::restore(open(&sealed_a, pass_a()).unwrap())
+        .unwrap()
+        .core
+        .shared_key()
+        .unwrap()
+        .sigma;
+    let sealed_b = Store::open(maker_db).unwrap().secret(id).unwrap().unwrap();
+    let b = open(&sealed_b, SecretString::from("maker passphrase".to_owned())).unwrap();
+    let ask = shared_ask(&a.share, &b.share, sigma).unwrap();
+    vec![
+        *a.share.expose_secret(),
+        *a.btc_key.expose_secret(),
+        *b.share.expose_secret(),
+        *b.btc_key.expose_secret(),
+        *ask.expose_secret(),
+    ]
+}
+
 fn spawn_maker(data: &Path, listen: &str, zec_payout: &str) -> MakerProcess {
+    let log = std::fs::File::create(data.join("maker.log")).unwrap();
     let child = Command::new(env!("CARGO_BIN_EXE_zecsplit-maker"))
         .env("ZECSPLIT_MAKER_NETWORK", "regtest")
         .env("ZECSPLIT_MAKER_IDENTITY", hex::encode(IDENTITY))
@@ -78,6 +198,8 @@ fn spawn_maker(data: &Path, listen: &str, zec_payout: &str) -> MakerProcess {
         .env("ZECSPLIT_MAKER_MIN_ZEC", "1000000")
         .env("ZECSPLIT_MAKER_MAX_ZEC", "200000000")
         .env("ZECSPLIT_MAKER_PASSPHRASE", "maker passphrase")
+        .stdout(Stdio::from(log.try_clone().unwrap()))
+        .stderr(Stdio::from(log))
         .spawn()
         .unwrap();
     MakerProcess(child)
@@ -89,7 +211,7 @@ fn bob_state(maker_db: &Path, id: &[u8; 32]) -> Option<BobState> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn g4_s_01_three_times_over_http_between_processes() {
+async fn g4_s_01_three_times_over_http_then_priv_01_02_03() {
     if std::env::var_os("ZECSPLIT_DEVNET").is_none() {
         eprintln!("skipped: set ZECSPLIT_DEVNET=1 with `just devnet-up` running");
         return;
@@ -129,6 +251,8 @@ async fn g4_s_01_three_times_over_http_between_processes() {
     };
     let mut store = Store::open(&dir.path().join("engine.sqlite")).unwrap();
     let maker_db = maker_dir.join("maker.sqlite");
+    let zec_from = zec_tip() + 1;
+    let mut secrets = Vec::new();
 
     for round in 1..=3 {
         let signed = maker.quote(ZEC_AMOUNT, Network::Regtest).await.unwrap();
@@ -173,12 +297,16 @@ async fn g4_s_01_three_times_over_http_between_processes() {
             "round {round}"
         );
         assert_eq!(bob, Some(BobState::Done(Outcome::Swapped)), "round {round}");
-        let txs: Vec<String> = store
-            .txs(&id)
-            .unwrap()
+        let maker_store = Store::open(&maker_db).unwrap();
+        let txs: Vec<String> = [&store, &maker_store]
             .into_iter()
+            .flat_map(|s| s.txs(&id).unwrap())
             .map(|t| format!("{} {}", t.name, t.txid))
             .collect();
         println!("round {round} swap {}: {txs:?}", hex::encode(id));
+        secrets.extend(swap_secrets(&store, &maker_db, &id));
     }
+    assert_shielded_only(zec_from, zec_tip());
+    drop(store);
+    assert_no_secret_on_disk(dir.path(), &secrets);
 }
