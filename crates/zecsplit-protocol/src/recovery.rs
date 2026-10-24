@@ -298,6 +298,28 @@ mod tests {
         assert!(matches!(decode(&bad_role), Err(RecoveryError::Format)));
     }
 
+    /// Fuzz: the plaintext parser never panics, whatever bytes it gets.
+    #[test]
+    fn fuzz_decode_never_panics() {
+        let good = encode(&alice_bundle()).unwrap();
+        let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+        let mut next = move |n: usize| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            usize::try_from(x % n.max(1) as u64).unwrap()
+        };
+        for _ in 0..20_000 {
+            let mut b = good.to_vec();
+            for _ in 0..=next(4) {
+                let i = next(b.len());
+                b[i] = u8::try_from(next(256)).unwrap();
+            }
+            b.truncate(next(b.len() + 1));
+            let _ = decode(&b);
+        }
+    }
+
     #[test]
     fn bob_file_needs_no_alice_fields() {
         let mut b = alice_bundle();

@@ -344,3 +344,161 @@ fn spec_3_5_r1_conflicting_lock_template_is_refused() {
     let (spk, v_lock) = bob.lock_output(&addr(3)).unwrap();
     assert!(bob.lock_template(lock_psbt(spk, v_lock), &addr(3)).is_err());
 }
+
+/// xorshift64*: deterministic mutations, so a failing seed replays.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+    fn below(&mut self, n: usize) -> usize {
+        usize::try_from(self.next() % n.max(1) as u64).unwrap()
+    }
+}
+
+/// One random edit: flip a bit, change a byte, truncate, extend, or zero everything.
+fn mutate(r: &mut Rng, bytes: &[u8]) -> Vec<u8> {
+    let mut b = bytes.to_vec();
+    match r.below(6) {
+        0 | 1 if !b.is_empty() => {
+            let i = r.below(b.len());
+            b[i] ^= 1 << r.below(8);
+        }
+        2 if !b.is_empty() => {
+            let i = r.below(b.len());
+            b[i] = u8::try_from(r.below(256)).unwrap();
+        }
+        3 => b.truncate(r.below(b.len())),
+        4 => b.extend((0..=r.below(40)).map(|_| u8::try_from(r.below(256)).unwrap())),
+        _ => b.iter_mut().for_each(|x| *x = 0),
+    }
+    if b == bytes {
+        b.push(0);
+    }
+    b
+}
+
+const FUZZ: u64 = 1000;
+
+/// Fuzz: no mutated setup or redeem signature is ever accepted, before or after the real one,
+/// and a rejection never poisons the session.
+#[test]
+fn fuzz_mutated_signatures_are_always_rejected() {
+    let (mut alice, mut bob, _) = revealed();
+    let refund = addr(3);
+    let (spk, v_lock) = bob.lock_output(&refund).unwrap();
+    let tpl = bob.lock_template(lock_psbt(spk, v_lock), &refund).unwrap();
+    let sigs_a = alice.on_lock_template(&tpl).unwrap();
+    let mut r = Rng(0x5eed);
+    let bad_a = |r: &mut Rng| SetupSigsAlice {
+        sig_cancel: mutate(r, &sigs_a.sig_cancel),
+        esig_refund: sigs_a.esig_refund.clone(),
+    };
+    let bad_refund = |r: &mut Rng| SetupSigsAlice {
+        sig_cancel: sigs_a.sig_cancel.clone(),
+        esig_refund: mutate(r, &sigs_a.esig_refund),
+    };
+    for _ in 0..FUZZ {
+        assert!(bob.on_setup_sigs_alice(&bad_a(&mut r)).is_err());
+        assert!(bob.on_setup_sigs_alice(&bad_refund(&mut r)).is_err());
+    }
+    assert!(!bob.may_broadcast_lock());
+    let sigs_b = bob.on_setup_sigs_alice(&sigs_a).unwrap();
+    for _ in 0..FUZZ {
+        assert!(bob.on_setup_sigs_alice(&bad_a(&mut r)).is_err());
+    }
+    for _ in 0..FUZZ {
+        let mut bad = sigs_b.clone();
+        bad.sig_cancel = mutate(&mut r, &sigs_b.sig_cancel);
+        assert!(alice.on_setup_sigs_bob(&bad).is_err());
+        let mut bad = sigs_b.clone();
+        bad.sig_punish = mutate(&mut r, &sigs_b.sig_punish);
+        assert!(alice.on_setup_sigs_bob(&bad).is_err());
+    }
+    alice.on_setup_sigs_bob(&sigs_b).unwrap();
+    let esig = bob.encsig().unwrap();
+    for _ in 0..FUZZ {
+        let mut bad = esig.clone();
+        bad.esig_redeem = mutate(&mut r, &esig.esig_redeem);
+        assert!(alice.on_encsig(&bad).is_err());
+    }
+    alice.on_encsig(&esig).unwrap();
+    alice.signed_redeem().unwrap();
+}
+
+/// Fuzz: a lock template that differs in any byte from the accepted one is refused (§3.5-R1).
+#[test]
+fn fuzz_mutated_lock_templates_are_refused_after_the_first() {
+    let (mut alice, mut bob, _) = revealed();
+    let refund = addr(3);
+    let (spk, v_lock) = bob.lock_output(&refund).unwrap();
+    let tpl = bob.lock_template(lock_psbt(spk, v_lock), &refund).unwrap();
+    alice.on_lock_template(&tpl).unwrap();
+    let mut r = Rng(0x7e3);
+    for _ in 0..FUZZ {
+        let mut bad = tpl.clone();
+        match r.below(4) {
+            0 => {
+                let s = mutate(&mut r, bad.psbt_base64.as_bytes());
+                bad.psbt_base64 = String::from_utf8_lossy(&s).into_owned();
+            }
+            1 => bad.lock_vout ^= 1 << r.below(32),
+            2 => bad.v_lock_sats ^= 1 << r.below(64),
+            _ => bad.refund_addr = addr(u8::try_from(4 + r.below(200)).unwrap()),
+        }
+        if bad != tpl {
+            assert!(alice.on_lock_template(&bad).is_err());
+        }
+    }
+    alice.on_lock_template(&tpl).unwrap();
+}
+
+/// Fuzz: a mutated reveal never yields a shared key, and the real one still does afterwards.
+#[test]
+fn fuzz_mutated_reveals_are_rejected() {
+    let mut a = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
+    let mut b = Core::new(&mut OsRng, quote(), Role::Bob, addr(2)).unwrap();
+    a.on_commit(&b.commit_msg()).unwrap();
+    b.on_commit(&a.commit_msg()).unwrap();
+    a.reveal_msg().unwrap();
+    let reveal_b = serde_json::to_vec(&b.reveal_msg().unwrap()).unwrap();
+    let mut r = Rng(0xdead);
+    for _ in 0..60 {
+        let bytes = mutate(&mut r, &reveal_b);
+        if let Ok(bad) = serde_json::from_slice::<crate::messages::RevealBody>(&bytes)
+            && serde_json::to_vec(&bad).unwrap() != reveal_b
+        {
+            assert!(a.on_reveal(&bad).is_err());
+        }
+    }
+    let good = serde_json::from_slice(&reveal_b).unwrap();
+    a.on_reveal(&good).unwrap();
+}
+
+/// Fuzz: the wire decoder never panics on random or mutated input.
+#[test]
+fn fuzz_decode_never_panics() {
+    use crate::messages::{Envelope, Message, PROTOCOL_VERSION, decode, encode};
+    let env = Envelope {
+        v: PROTOCOL_VERSION,
+        swap_id: [9; 32],
+        message: Message::RedeemEncSig(crate::messages::RedeemEncSig {
+            esig_redeem: vec![7; 130],
+        }),
+    };
+    let good = encode(&env).unwrap();
+    let mut r = Rng(0xfeed);
+    for _ in 0..20_000 {
+        let _ = decode(&mutate(&mut r, &good));
+        let len = r.below(64);
+        let _ = decode(
+            &(0..len)
+                .map(|_| u8::try_from(r.below(256)).unwrap())
+                .collect::<Vec<_>>(),
+        );
+    }
+}
