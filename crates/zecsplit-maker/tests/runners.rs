@@ -18,8 +18,8 @@ use zecsplit_crypto::{Ask, Role};
 use zecsplit_maker::runner::{self as bob, BobRunner, Wallet, ZecNode};
 use zecsplit_protocol::alice::{AliceInput, AliceState};
 use zecsplit_protocol::bob::{BobInput, BobState};
-use zecsplit_protocol::machine::{Alert, Outcome, ZecLock};
-use zecsplit_protocol::messages::{Network, Quote};
+use zecsplit_protocol::machine::{AbortReason, Alert, Outcome, ZecLock};
+use zecsplit_protocol::messages::{Envelope, Network, Quote};
 use zecsplit_protocol::session::alice::AliceSession;
 use zecsplit_protocol::session::bob::BobSession;
 use zecsplit_protocol::session::{Core, Shared};
@@ -405,6 +405,52 @@ async fn adv_07_blocked_maker_refund_lets_alice_punish_at_t2() {
         )
     );
     assert_eq!(swept(&zec), []);
+}
+
+/// A maker that takes the quote and then never answers (S-02).
+struct Silent;
+
+#[async_trait]
+impl alice::Maker for Silent {
+    async fn send(&self, _: &Envelope) -> Result<Option<Envelope>, String> {
+        Ok(None)
+    }
+    async fn next(&self, _: &[u8; 32]) -> Result<Option<Envelope>, String> {
+        Ok(None)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn s_02_maker_never_locks_alice_aborts_after_the_timeout() {
+    let chain = FakeChain::default();
+    let sources: [&dyn BtcSource; 2] = [&chain, &chain];
+    let zec = FakeZcash::default();
+    let ports = alice::Ports {
+        maker: &Silent,
+        sources: &sources,
+        broadcast: &chain,
+        zec: &zec,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&dir.path().join("engine.sqlite")).unwrap();
+    let a = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
+    let mut alice =
+        AliceRunner::start(&mut store, AliceSession::new(a), pass(), "http://maker", 0).unwrap();
+    alice
+        .feed(&mut store, &ports, AliceInput::Begin, 0)
+        .await
+        .unwrap();
+    alice
+        .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS - 1)
+        .await
+        .unwrap();
+    assert!(!alice.state.is_terminal());
+    alice
+        .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS)
+        .await
+        .unwrap();
+    assert_eq!(alice.state, AliceState::Aborted(AbortReason::NoLock));
+    assert!(alice.payment_request.is_none());
 }
 
 #[tokio::test(flavor = "multi_thread")]
