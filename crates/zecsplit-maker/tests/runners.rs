@@ -151,6 +151,9 @@ impl ZecSweep for FakeZcash {
     async fn confirmations(&self, _: &Shared, txid: &str) -> Result<Option<u32>, String> {
         Ok(self.confs(txid))
     }
+    async fn held(&self, _: &Shared) -> Result<u64, String> {
+        Ok(self.paid.lock().unwrap().map_or(0, |_| quote().zec_amount))
+    }
 }
 
 #[async_trait]
