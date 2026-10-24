@@ -10,7 +10,7 @@ use zecsplit_crypto::MakerSecret;
 use zecsplit_maker::http::router;
 use zecsplit_maker::ports::BitcoindWallet;
 use zecsplit_maker::runner::Ports;
-use zecsplit_maker::service::{Config, Service};
+use zecsplit_maker::service::{Config, Service, owned_lock_server};
 use zecsplit_protocol::messages::Network;
 use zecsplit_protocol::recovery::SecretString;
 use zecsplit_store::Store;
@@ -28,8 +28,14 @@ fn num(name: &str) -> Result<u64, String> {
 async fn run() -> Result<(), String> {
     let network = match var("ZECSPLIT_MAKER_NETWORK")?.as_str() {
         "regtest" => Network::Regtest,
-        other => return Err(format!("network {other} is not supported yet")),
+        "test" => Network::Test,
+        "main_beta" => Network::MainBeta,
+        other => return Err(format!("unknown network {other}")),
     };
+    owned_lock_server(network, &var("ZECSPLIT_MAKER_LIGHT_SERVER")?)?;
+    if network != Network::Regtest {
+        return Err("only regtest is supported yet".into());
+    }
     let mut identity = [0; 32];
     hex::decode_to_slice(var("ZECSPLIT_MAKER_IDENTITY")?, &mut identity)
         .map_err(|e| format!("ZECSPLIT_MAKER_IDENTITY: {e}"))?;

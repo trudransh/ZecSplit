@@ -1,6 +1,7 @@
 //! The maker service: signs quotes, keeps one Bob runner per swap, and ticks them all (INTERFACES §2).
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use zecsplit_crypto::rand_core::{OsRng, RngCore};
@@ -32,6 +33,26 @@ fn timings(network: Network) -> Option<(u16, u16, u16, u16, u16)> {
         Network::Regtest => Some((20, 20, 1, 1, 5)),
         Network::Test => Some((36, 36, 1, 5, 12)),
         Network::MainBeta => None,
+    }
+}
+
+/// §4.3-R4: outside regtest the lock check must run on the maker's own node, reached over loopback.
+pub fn owned_lock_server(network: Network, url: &str) -> Result<(), String> {
+    if network == Network::Regtest {
+        return Ok(());
+    }
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let authority = rest.split('/').next().unwrap_or_default();
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or_default(),
+        None => authority.split(':').next().unwrap_or_default(),
+    };
+    if host == "localhost" || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback()) {
+        Ok(())
+    } else {
+        Err(format!(
+            "§4.3-R4: lock check server {url} is not this machine's own node"
+        ))
     }
 }
 
@@ -183,5 +204,34 @@ impl Service {
             }
         }
         failures
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spec_4_3_r4_refuses_a_lock_server_it_does_not_own_adv_04() {
+        for url in [
+            "http://127.0.0.1:9067",
+            "https://localhost:9067",
+            "http://[::1]:9067",
+        ] {
+            assert_eq!(owned_lock_server(Network::Test, url), Ok(()), "{url}");
+        }
+        for url in [
+            "https://zec.rocks:443",
+            "http://203.0.113.7:9067",
+            "http://127.0.0.1.example.com:9067",
+            "http://localhost.example.com",
+        ] {
+            assert!(owned_lock_server(Network::Test, url).is_err(), "{url}");
+            assert!(owned_lock_server(Network::MainBeta, url).is_err(), "{url}");
+        }
+        assert_eq!(
+            owned_lock_server(Network::Regtest, "https://zec.rocks:443"),
+            Ok(())
+        );
     }
 }

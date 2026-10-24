@@ -68,18 +68,18 @@ impl Wallet for BitcoindWallet {
     }
 }
 
-/// §4.3-R2: the lock counts only once notes worth `zatoshis` have `min_conf` confirmations.
+/// §4.3-R2, §5.5: the lock counts only when notes sum to exactly `zatoshis`, all with `min_conf` confirmations.
 pub fn zec_lock(seen: LockStatus, zatoshis: u64, min_conf: u32) -> ZecLock {
-    if seen.confirmed >= zatoshis {
+    if seen.total == 0 {
+        ZecLock::Unseen
+    } else if seen.total != zatoshis {
+        ZecLock::WrongAmount
+    } else if seen.confirmed == zatoshis {
         ZecLock::Correct {
             confirmations: min_conf,
         }
-    } else if seen.total >= zatoshis {
-        ZecLock::Correct { confirmations: 0 }
-    } else if seen.total > 0 {
-        ZecLock::WrongAmount
     } else {
-        ZecLock::Unseen
+        ZecLock::Correct { confirmations: 0 }
     }
 }
 
@@ -121,14 +121,20 @@ mod tests {
     #[test]
     fn spec_4_3_r2_lock_counts_only_when_enough_is_confirmed() {
         assert_eq!(zec_lock(seen(0, 0), 10, 5), ZecLock::Unseen);
-        assert_eq!(zec_lock(seen(4, 0), 10, 5), ZecLock::WrongAmount);
         assert_eq!(
             zec_lock(seen(10, 4), 10, 5),
             ZecLock::Correct { confirmations: 0 }
         );
         assert_eq!(
-            zec_lock(seen(12, 12), 10, 5),
+            zec_lock(seen(10, 10), 10, 5),
             ZecLock::Correct { confirmations: 5 }
         );
+    }
+
+    #[test]
+    fn spec_5_5_underpay_and_overpay_are_wrong_amounts_adv_05() {
+        assert_eq!(zec_lock(seen(4, 4), 10, 5), ZecLock::WrongAmount);
+        assert_eq!(zec_lock(seen(12, 12), 10, 5), ZecLock::WrongAmount);
+        assert_eq!(zec_lock(seen(11, 10), 10, 5), ZecLock::WrongAmount);
     }
 }
