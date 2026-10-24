@@ -29,5 +29,6 @@ zcash_protocol.workspace = true
 zecsplitd = { path = "../zecsplitd" }
 hex.workspace = true
 reddsa.workspace = true
+reqwest.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
