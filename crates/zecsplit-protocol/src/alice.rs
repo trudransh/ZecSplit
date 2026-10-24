@@ -177,14 +177,7 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
             TxStatus::Unseen => (S::SigsExchanged, vec![]),
             TxStatus::Mempool | TxStatus::Confirmed { .. } => {
                 match v.lock.confirmed_height(tip, p.n_conf_btc) {
-                    Some(h_lock) => {
-                        let next = S::AwaitingZecPayment { h_lock };
-                        let (s, mut acts) = on_chain(next, v, p);
-                        if s == next {
-                            acts.insert(0, A::ShowPaymentRequest);
-                        }
-                        (s, acts)
-                    }
+                    Some(h_lock) => on_chain(S::AwaitingZecPayment { h_lock }, v, p),
                     None => (S::BtcLockSeen, vec![]),
                 }
             }
@@ -194,9 +187,10 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
             if let Some(done) = lock_phase_outcome(h_lock, v, p) {
                 return done;
             }
-            if v.lock.confirmed_height(tip, p.n_conf_btc).is_none() {
-                return (S::BtcLockSeen, vec![A::HidePaymentRequest]);
-            }
+            let Some(h_lock) = v.lock.confirmed_height(tip, p.n_conf_btc) else {
+                return (state, vec![A::HidePaymentRequest]);
+            };
+            let state = S::AwaitingZecPayment { h_lock };
             if cancel_valid(tip, h_lock, p.t1) {
                 return (
                     S::CancelBroadcast { h_lock },
@@ -209,7 +203,7 @@ fn on_chain(state: AliceState, v: &ChainView, p: &Params) -> (AliceState, Vec<Al
                     vec![A::HidePaymentRequest, A::Alert(Alert::MarginTooSmall)],
                 );
             }
-            (state, vec![])
+            (state, vec![A::ShowPaymentRequest])
         }
 
         S::EncSigReceived { h_lock } => {
@@ -397,11 +391,19 @@ mod tests {
     }
 
     #[test]
-    fn adv_09_reorged_lock_hides_the_request() {
+    fn adv_09_reorged_lock_hides_the_request_and_never_aborts() {
+        let s = S::AwaitingZecPayment { h_lock: H_LOCK };
         let v = view(H_LOCK + 2).with_lock(TxStatus::Mempool);
+        assert_eq!(chain(s, v), (s, vec![A::HidePaymentRequest]));
+        assert_eq!(step_alice(s, &I::LockTimedOut, &P).0, s);
+        assert_eq!(step_alice(s, &I::PeerMisbehaved, &P).0, s);
+        let reconfirmed = view(H_LOCK + 4).with_lock(TxStatus::Confirmed { height: H_LOCK + 3 });
         assert_eq!(
-            chain(S::AwaitingZecPayment { h_lock: H_LOCK }, v),
-            (S::BtcLockSeen, vec![A::HidePaymentRequest])
+            chain(s, reconfirmed),
+            (
+                S::AwaitingZecPayment { h_lock: H_LOCK + 3 },
+                vec![A::ShowPaymentRequest]
+            )
         );
     }
 
