@@ -70,10 +70,18 @@ async fn next(State(svc): State<Shared>, Path(id): Path<String>) -> Response {
     }
 }
 
-/// `GET /v1/info`: the identity key takers pin.
+/// `GET /v1/info`: the identity key takers pin, and the quotable range.
 async fn info(State(svc): State<Shared>) -> Response {
-    match svc.lock().await.identity_key() {
-        Ok(key) => axum::Json(json!({ "v": 1, "maker_key": hex::encode(key) })).into_response(),
+    let svc = svc.lock().await;
+    let (min_zec, max_zec) = svc.limits();
+    match svc.identity_key() {
+        Ok(key) => axum::Json(json!({
+            "v": 1,
+            "maker_key": hex::encode(key),
+            "min_zec": min_zec,
+            "max_zec": max_zec,
+        }))
+        .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     }
 }
