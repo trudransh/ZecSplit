@@ -26,5 +26,16 @@ devnet-test:
     ZECSPLIT_DEVNET=1 cargo test -p zecsplit-maker --test devnet_runners -- --nocapture --test-threads=1
     ZECSPLIT_DEVNET=1 cargo test -p zecsplit-maker --test devnet_http -- --nocapture --test-threads=1
 
+# Judge kit (`just devnet-up` first): three swaps between real engine and maker processes with
+# the privacy checks, then the refund path; prints every transaction id.
+demo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export ZECSPLIT_DEVNET=1
+    echo "Happy path x3 over HTTP, then PRIV-01/02/03 (a few minutes)..."
+    cargo test -q -p zecsplit-maker --test devnet_http -- --nocapture 2>&1 | grep -E "^round [0-9]+ swap|test result|panicked"
+    echo "Refund path: maker locks, taker pays, nobody redeems, cancel then refund..."
+    cargo test -q -p zecsplit-protocol --test devnet_swap t_024_cancel_then_refund -- --nocapture 2>&1 | grep -E "^refund path|test result|panicked"
+
 devnet-down:
     docker compose -f devnet/docker-compose.yml down
