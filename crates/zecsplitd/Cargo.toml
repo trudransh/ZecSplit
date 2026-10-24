@@ -16,16 +16,18 @@ zecsplit-protocol = { path = "../zecsplit-protocol" }
 zecsplit-store = { path = "../zecsplit-store" }
 zecsplit-zcash = { path = "../zecsplit-zcash" }
 async-trait.workspace = true
+axum.workspace = true
 bitcoin.workspace = true
+futures-util.workspace = true
 hex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 ts-rs.workspace = true
 zcash_protocol.workspace = true
 
 [dev-dependencies]
 reddsa.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
