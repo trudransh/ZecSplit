@@ -10,6 +10,13 @@ use zecsplit_protocol::messages::{
 
 use crate::runner::Maker;
 
+/// What `GET /v1/info` says; the key is only trusted once it matches the pinned one.
+pub struct MakerInfo {
+    pub maker_key: [u8; 32],
+    pub min_zec: u64,
+    pub max_zec: u64,
+}
+
 /// A maker reached at `base`, e.g. `http://127.0.0.1:7781`.
 pub struct HttpMaker {
     http: reqwest::Client,
@@ -51,6 +58,11 @@ impl HttpMaker {
 
     /// `GET /v1/info`: the maker's identity key, to pin before trusting its quotes (§2-R1).
     pub async fn identity_key(&self) -> Result<[u8; 32], String> {
+        Ok(self.info().await?.maker_key)
+    }
+
+    /// `GET /v1/info`.
+    pub async fn info(&self) -> Result<MakerInfo, String> {
         let info: serde_json::Value = self
             .http
             .get(format!("{}/v1/info", self.base))
@@ -60,13 +72,17 @@ impl HttpMaker {
             .json()
             .await
             .map_err(err)?;
-        let mut key = [0; 32];
+        let mut maker_key = [0; 32];
         hex::decode_to_slice(
             info["maker_key"].as_str().ok_or("info: no maker_key")?,
-            &mut key,
+            &mut maker_key,
         )
         .map_err(err)?;
-        Ok(key)
+        Ok(MakerInfo {
+            maker_key,
+            min_zec: info["min_zec"].as_u64().ok_or("info: no min_zec")?,
+            max_zec: info["max_zec"].as_u64().ok_or("info: no max_zec")?,
+        })
     }
 
     /// `POST /v1/quote`: a signed quote, still to be verified against the pinned key (§2-R2).
