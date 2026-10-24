@@ -23,8 +23,23 @@ pub struct HttpMaker {
     base: String,
 }
 
+/// The largest maker response read; every INTERFACES §2 body is a few KB.
+const MAX_BODY: usize = 256 * 1024;
+
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
+}
+
+/// Reads a response body, refusing one larger than `MAX_BODY` so a maker can't exhaust memory.
+async fn body(mut res: reqwest::Response) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    while let Some(chunk) = res.chunk().await.map_err(err)? {
+        if out.len() + chunk.len() > MAX_BODY {
+            return Err("maker: response too large".into());
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
 }
 
 impl HttpMaker {
@@ -43,16 +58,16 @@ impl HttpMaker {
         match res.status() {
             StatusCode::NO_CONTENT => Ok(None),
             StatusCode::OK => {
-                let env = decode(&res.bytes().await.map_err(err)?).map_err(err)?;
+                let env = decode(&body(res).await?).map_err(err)?;
                 match env.message {
                     Message::Error(e) => Err(format!("maker: {}: {}", e.code, e.message)),
                     _ => Ok(Some(env)),
                 }
             }
-            status => Err(format!(
-                "maker: http {status}: {}",
-                res.text().await.map_err(err)?
-            )),
+            status => {
+                let text = String::from_utf8_lossy(&body(res).await?).into_owned();
+                Err(format!("maker: http {status}: {:.200}", text))
+            }
         }
     }
 
@@ -63,15 +78,13 @@ impl HttpMaker {
 
     /// `GET /v1/info`.
     pub async fn info(&self) -> Result<MakerInfo, String> {
-        let info: serde_json::Value = self
+        let res = self
             .http
             .get(format!("{}/v1/info", self.base))
             .send()
             .await
-            .map_err(err)?
-            .json()
-            .await
             .map_err(err)?;
+        let info: serde_json::Value = serde_json::from_slice(&body(res).await?).map_err(err)?;
         let mut maker_key = [0; 32];
         hex::decode_to_slice(
             info["maker_key"].as_str().ok_or("info: no maker_key")?,
@@ -120,5 +133,31 @@ impl Maker for HttpMaker {
     async fn next(&self, swap_id: &[u8; 32]) -> Result<Option<Envelope>, String> {
         let url = format!("{}/v1/swaps/{}/next", self.base, hex::encode(swap_id));
         self.exchange(self.http.get(url)).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A maker answering every request with `size` bytes.
+    async fn flood(size: usize) -> HttpMaker {
+        let app = axum::Router::new().fallback(move || async move { vec![b'a'; size] });
+        let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = socket.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(socket, app).await });
+        HttpMaker::new(&format!("http://{addr}")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn oversized_maker_responses_are_refused() {
+        let maker = flood(MAX_BODY + 1).await;
+        assert_eq!(
+            maker.next(&[0; 32]).await.unwrap_err(),
+            "maker: response too large"
+        );
+        assert!(maker.info().await.is_err());
+        let small = flood(10).await;
+        assert!(small.next(&[0; 32]).await.unwrap_err() != "maker: response too large");
     }
 }
