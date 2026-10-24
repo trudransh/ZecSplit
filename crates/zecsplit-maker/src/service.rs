@@ -48,8 +48,14 @@ pub fn owned_lock_server(network: Network, url: &str) -> Result<(), String> {
     }
 }
 
-/// ADV-08: unfinished setups one maker holds at once; more quotes wait until one ends.
-pub const MAX_SETUPS: usize = 16;
+/// §8, ADV-08: swaps one maker runs at once, setups included; more quotes wait until one ends.
+pub fn max_swaps(network: Network) -> usize {
+    match network {
+        Network::Regtest => 10,
+        Network::Test => 3,
+        Network::MainBeta => 1,
+    }
+}
 
 fn now() -> i64 {
     SystemTime::now()
@@ -130,8 +136,8 @@ impl Service {
         if req.zec_amount < self.config.min_zec || req.zec_amount > self.config.max_zec {
             return Err("amount outside the limits".into());
         }
-        if self.runners.values().filter(|r| r.in_setup()).count() >= MAX_SETUPS {
-            return Err("busy: too many swaps in setup, try again shortly".into());
+        if self.runners.len() >= max_swaps(req.network) {
+            return Err("busy: too many swaps running, try again later".into());
         }
         let terms = terms(req.network).ok_or("network not served")?;
         let btc_amount = u64::try_from(

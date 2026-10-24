@@ -208,7 +208,7 @@ impl BobRunner {
     }
 
     /// Nothing is on chain yet, so a stalled taker costs Bob nothing but a slot.
-    pub fn in_setup(&self) -> bool {
+    fn in_setup(&self) -> bool {
         matches!(
             self.state,
             BobState::Quoted | BobState::Committed | BobState::Revealed
