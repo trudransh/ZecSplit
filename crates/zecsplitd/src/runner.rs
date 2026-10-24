@@ -361,6 +361,7 @@ impl AliceRunner {
                 let sigs = self.session.setup_sigs()?;
                 self.send(store, ports, Message::SetupSigsAlice(sigs)).await
             }
+            AliceAction::ShowPaymentRequest if self.payment_request.is_some() => Ok(None),
             AliceAction::ShowPaymentRequest => {
                 let shared = self
                     .session
