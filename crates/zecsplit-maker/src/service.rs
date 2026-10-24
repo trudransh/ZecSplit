@@ -90,6 +90,11 @@ impl Service {
         maker_public_key(&self.identity).map_err(|e| e.to_string())
     }
 
+    /// The quotable range, as `(min_zec, max_zec)` in zatoshis.
+    pub fn limits(&self) -> (u64, u64) {
+        (self.config.min_zec, self.config.max_zec)
+    }
+
     /// §2-R2: a signed 60 s quote within the limits, with its swap recorded before it leaves.
     pub async fn quote(&mut self, req: &QuoteRequest) -> Envelope {
         match self.try_quote(req).await {

@@ -230,6 +230,11 @@ impl Core {
     }
 
     /// §3.1: this party's commitment.
+    /// This party's own payout (Alice) or refund (Bob) address.
+    pub fn payout_addr(&self) -> &str {
+        &self.payout_addr
+    }
+
     pub fn commit_msg(&self) -> CommitBody {
         CommitBody {
             commitment: self.commitment.0,

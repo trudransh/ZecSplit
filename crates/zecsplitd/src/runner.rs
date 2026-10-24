@@ -67,6 +67,8 @@ pub struct AliceRunner {
     /// `(lock UA, zatoshis)` while the UI may show the payment request (§4.2-R2).
     pub payment_request: Option<(String, u64)>,
     pub alerts: Vec<Alert>,
+    /// The chain snapshot of the last tick, for the UI's confirmation counts.
+    pub last_view: Option<ChainView>,
 }
 
 const ZEC_SWEEP: &str = "zec_sweep";
@@ -125,6 +127,7 @@ impl AliceRunner {
             maker_endpoint: maker_endpoint.to_string(),
             payment_request: None,
             alerts: Vec::new(),
+            last_view: None,
         })
     }
 
@@ -154,6 +157,7 @@ impl AliceRunner {
             maker_endpoint,
             payment_request: None,
             alerts: Vec::new(),
+            last_view: None,
         }))
     }
 
@@ -230,7 +234,20 @@ impl AliceRunner {
             }
         }
         let view = self.view(store, ports).await?;
+        self.last_view = Some(view);
         self.feed(store, ports, AliceInput::Chain(view), now).await
+    }
+
+    /// Where the BTC goes.
+    pub fn payout_addr(&self) -> &str {
+        self.session.core.payout_addr()
+    }
+
+    /// `tx_lock`'s txid once Bob's template is verified.
+    pub fn lock_txid(&self) -> Option<String> {
+        self.session
+            .templates()
+            .map(|t| t.lock.unsigned_tx.compute_txid().to_string())
     }
 
     /// Verifies one maker message into a machine input; anything invalid is misbehaviour.
