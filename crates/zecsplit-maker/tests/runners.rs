@@ -407,8 +407,10 @@ async fn adv_07_blocked_maker_refund_lets_alice_punish_at_t2() {
     assert_eq!(swept(&zec), []);
 }
 
-/// A maker that takes the quote and then never answers (S-02).
-struct Silent;
+/// A maker that takes the quote and then never answers (S-02), or is down altogether.
+struct Silent {
+    down: bool,
+}
 
 #[async_trait]
 impl alice::Maker for Silent {
@@ -416,41 +418,49 @@ impl alice::Maker for Silent {
         Ok(None)
     }
     async fn next(&self, _: &[u8; 32]) -> Result<Option<Envelope>, String> {
+        if self.down {
+            return Err("maker unreachable".into());
+        }
         Ok(None)
     }
 }
 
+/// S-02, and a dead maker never stops Alice's chain step.
 #[tokio::test(flavor = "multi_thread")]
 async fn s_02_maker_never_locks_alice_aborts_after_the_timeout() {
-    let chain = FakeChain::default();
-    let sources: [&dyn BtcSource; 2] = [&chain, &chain];
-    let zec = FakeZcash::default();
-    let ports = alice::Ports {
-        maker: &Silent,
-        sources: &sources,
-        broadcast: &chain,
-        zec: &zec,
-    };
-    let dir = tempfile::tempdir().unwrap();
-    let mut store = Store::open(&dir.path().join("engine.sqlite")).unwrap();
-    let a = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
-    let mut alice =
-        AliceRunner::start(&mut store, AliceSession::new(a), pass(), "http://maker", 0).unwrap();
-    alice
-        .feed(&mut store, &ports, AliceInput::Begin, 0)
-        .await
-        .unwrap();
-    alice
-        .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS - 1)
-        .await
-        .unwrap();
-    assert!(!alice.state.is_terminal());
-    alice
-        .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS)
-        .await
-        .unwrap();
-    assert_eq!(alice.state, AliceState::Aborted(AbortReason::NoLock));
-    assert!(alice.payment_request.is_none());
+    for down in [false, true] {
+        let chain = FakeChain::default();
+        let sources: [&dyn BtcSource; 2] = [&chain, &chain];
+        let zec = FakeZcash::default();
+        let maker = Silent { down };
+        let ports = alice::Ports {
+            maker: &maker,
+            sources: &sources,
+            broadcast: &chain,
+            zec: &zec,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&dir.path().join("engine.sqlite")).unwrap();
+        let a = Core::new(&mut OsRng, quote(), Role::Alice, addr(1)).unwrap();
+        let mut alice =
+            AliceRunner::start(&mut store, AliceSession::new(a), pass(), "http://maker", 0)
+                .unwrap();
+        alice
+            .feed(&mut store, &ports, AliceInput::Begin, 0)
+            .await
+            .unwrap();
+        let early = alice
+            .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS - 1)
+            .await;
+        assert_eq!(early.is_err(), down);
+        assert!(!alice.state.is_terminal());
+        let late = alice
+            .tick(&mut store, &ports, alice::LOCK_TIMEOUT_SECS)
+            .await;
+        assert_eq!(late.is_err(), down);
+        assert_eq!(alice.state, AliceState::Aborted(AbortReason::NoLock));
+        assert!(alice.payment_request.is_none());
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
