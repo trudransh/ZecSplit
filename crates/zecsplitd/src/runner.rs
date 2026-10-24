@@ -222,6 +222,25 @@ impl AliceRunner {
         ports: &Ports<'_>,
         now: i64,
     ) -> Result<(), RunnerError> {
+        let inbox = self.inbox(store, ports, now).await;
+        let view = self.view(store, ports).await?;
+        self.last_view = Some(view);
+        self.feed(store, ports, AliceInput::Chain(view), now)
+            .await?;
+        if now - self.started_at >= LOCK_TIMEOUT_SECS {
+            self.feed(store, ports, AliceInput::LockTimedOut, now)
+                .await?;
+        }
+        inbox
+    }
+
+    /// Takes up to `MAX_MESSAGES_PER_TICK` maker messages; a maker failure never blocks the chain step.
+    async fn inbox(
+        &mut self,
+        store: &mut Store,
+        ports: &Ports<'_>,
+        now: i64,
+    ) -> Result<(), RunnerError> {
         for _ in 0..MAX_MESSAGES_PER_TICK {
             if self.state.is_terminal() {
                 break;
@@ -237,14 +256,6 @@ impl AliceRunner {
             if let Some(input) = self.on_message(env, store)? {
                 self.feed(store, ports, input, now).await?;
             }
-        }
-        let view = self.view(store, ports).await?;
-        self.last_view = Some(view);
-        self.feed(store, ports, AliceInput::Chain(view), now)
-            .await?;
-        if now - self.started_at >= LOCK_TIMEOUT_SECS {
-            self.feed(store, ports, AliceInput::LockTimedOut, now)
-                .await?;
         }
         Ok(())
     }
