@@ -154,6 +154,9 @@ impl ZecSweep for FakeZec {
     async fn confirmations(&self, _: &Shared, _: &str) -> Result<Option<u32>, String> {
         Ok(self.0.lock().unwrap().as_ref().map(|(_, c)| *c))
     }
+    async fn held(&self, _: &Shared) -> Result<u64, String> {
+        Ok(1)
+    }
 }
 
 fn quote() -> Quote {

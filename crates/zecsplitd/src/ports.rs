@@ -21,4 +21,11 @@ impl<P: Parameters + Clone + Send + Sync + 'static> ZecSweep for LockWallets<P> 
             .await
             .map_err(|e| e.to_string())
     }
+
+    async fn held(&self, shared: &Shared) -> Result<u64, String> {
+        LockWallets::status(self, &shared.lock_key(), 1)
+            .await
+            .map(|s| s.total)
+            .map_err(|e| e.to_string())
+    }
 }

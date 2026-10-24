@@ -46,6 +46,8 @@ pub trait ZecSweep: Send + Sync {
     async fn sweep(&self, shared: &Shared, ask: &Ask) -> Result<String, String>;
     /// Confirmations of a sweep, `None` while unmined.
     async fn confirmations(&self, shared: &Shared, txid: &str) -> Result<Option<u32>, String>;
+    /// Zatoshis the lock holds, from a local scan.
+    async fn held(&self, shared: &Shared) -> Result<u64, String>;
 }
 
 /// Everything the runner talks to.
@@ -468,6 +470,11 @@ impl AliceRunner {
                 Some(confirmations) => SweepStatus::Confirmed { confirmations },
                 None => SweepStatus::Mempool,
             };
+        } else if self.state == AliceState::RefundSeen
+            && let Some(shared) = self.session.core.shared_key()
+            && ports.zec.held(&shared).await.map_err(RunnerError::Port)? == 0
+        {
+            view.zec_sweep = SweepStatus::NothingToSweep;
         }
         Ok(view)
     }
