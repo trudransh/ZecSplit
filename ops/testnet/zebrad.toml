@@ -1,0 +1,14 @@
+# Zebra on the public Zcash testnet (NU7 active since 4,465,026) for the maker's own lock
+# checks (§4.3-R1, ADR-009). RPC and the light server listen inside the container only;
+# compose publishes them on the VM's 127.0.0.1, reached over an SSH tunnel.
+
+[network]
+network = "Testnet"
+
+[state]
+cache_dir = "/home/zebra/.cache/zebra"
+
+[rpc]
+listen_addr = "0.0.0.0:18232"
+enable_cookie_auth = false
+lightwalletd_listen_addr = "0.0.0.0:9067"
