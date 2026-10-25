@@ -214,7 +214,10 @@ impl BitcoindRpc {
     pub fn new(url: &str, user: &str, pass: &str) -> Result<Self, SourceError> {
         tls();
         Ok(Self {
-            http: reqwest::Client::builder().timeout(TIMEOUT).build()?,
+            http: reqwest::Client::builder()
+                .timeout(TIMEOUT)
+                .tls_certs_only([])
+                .build()?,
             url: url.to_string(),
             user: user.to_string(),
             pass: pass.to_string(),

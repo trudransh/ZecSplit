@@ -55,6 +55,7 @@ impl HttpMaker {
         Ok(HttpMaker {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(60))
+                .tls_certs_only([])
                 .build()
                 .map_err(err)?,
             base: base.trim_end_matches('/').to_string(),
