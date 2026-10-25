@@ -6,7 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
-use zecsplit_btc::sources::{BitcoindRpc, BtcSource};
+use zcash_protocol::consensus::Network::TestNetwork;
+use zecsplit_btc::sources::{BitcoindRpc, BtcSource, Esplora};
 use zecsplit_crypto::rand_core::{OsRng, RngCore};
 use zecsplit_protocol::messages::Network;
 use zecsplit_store::Store;
@@ -14,7 +15,7 @@ use zecsplit_zcash::{LockWallets, regtest};
 use zecsplitd::engine::{Config, Engine};
 use zecsplitd::http::{Access, router};
 use zecsplitd::maker_client::HttpMaker;
-use zecsplitd::runner::Ports;
+use zecsplitd::runner::{Ports, ZecSweep};
 
 fn var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("{name} is not set"))
@@ -28,7 +29,8 @@ fn var_or(name: &str, default: &str) -> String {
 async fn run() -> Result<(), String> {
     let network = match var("ZECSPLIT_ENGINE_NETWORK")?.as_str() {
         "regtest" => Network::Regtest,
-        other => return Err(format!("network {other} is not supported yet")),
+        "test" => Network::Test,
+        other => return Err(format!("network {other} is not supported")),
     };
     let listen: SocketAddr = var_or("ZECSPLIT_ENGINE_LISTEN", "127.0.0.1:7780")
         .parse()
@@ -49,21 +51,35 @@ async fn run() -> Result<(), String> {
         var("ZECSPLIT_ENGINE_RPC_USER")?,
         var("ZECSPLIT_ENGINE_RPC_PASS")?,
     );
-    // ponytail: regtest has one node, so both §4.2-R1 sources are it; T-025 adds two Esploras.
-    let rpc = || BitcoindRpc::new(&node, &user, &pass).map_err(|e| e.to_string());
-    let source_a: &'static BitcoindRpc = Box::leak(Box::new(rpc()?));
-    let source_b: &'static BitcoindRpc = Box::leak(Box::new(rpc()?));
-    let sources: &'static [&'static dyn BtcSource] = Box::leak(Box::new([
-        source_a as &dyn BtcSource,
-        source_b as &dyn BtcSource,
-    ]));
+    let source_a: &'static BitcoindRpc = Box::leak(Box::new(
+        BitcoindRpc::new(&node, &user, &pass).map_err(|e| e.to_string())?,
+    ));
+    let source_b: &'static dyn BtcSource = match std::env::var("ZECSPLIT_ENGINE_ESPLORA") {
+        Ok(url) => Box::leak(Box::new(Esplora::new(&url).map_err(|e| e.to_string())?)),
+        Err(_) if network == Network::Regtest => source_a,
+        Err(_) => return Err("§4.2-R1: set ZECSPLIT_ENGINE_ESPLORA as a second source".into()),
+    };
+    let sources: &'static [&'static dyn BtcSource] =
+        Box::leak(Box::new([source_a as &dyn BtcSource, source_b]));
     let maker: &'static HttpMaker = Box::leak(Box::new(HttpMaker::new(&maker_url)?));
-    let zec = Box::leak(Box::new(LockWallets::new(
-        regtest(),
-        zec_dir,
-        &var("ZECSPLIT_ENGINE_LIGHT_SERVER")?,
-        &var("ZECSPLIT_ENGINE_ZEC_REFUND")?,
-    )));
+    let (server, refund) = (
+        var("ZECSPLIT_ENGINE_LIGHT_SERVER")?,
+        var("ZECSPLIT_ENGINE_ZEC_REFUND")?,
+    );
+    let zec: &'static dyn ZecSweep = match network {
+        Network::Regtest => Box::leak(Box::new(LockWallets::new(
+            regtest(),
+            zec_dir,
+            &server,
+            &refund,
+        ))),
+        Network::Test | Network::MainBeta => Box::leak(Box::new(LockWallets::new(
+            TestNetwork,
+            zec_dir,
+            &server,
+            &refund,
+        ))),
+    };
     let ports = Ports {
         maker,
         sources,
