@@ -26,8 +26,15 @@ pub struct HttpMaker {
 /// The largest maker response read; every INTERFACES §2 body is a few KB.
 const MAX_BODY: usize = 256 * 1024;
 
-fn err(e: impl std::fmt::Display) -> String {
-    e.to_string()
+/// The error and every cause under it, so a timeout or refused connection is visible.
+fn err(e: impl std::error::Error) -> String {
+    let mut out = e.to_string();
+    let mut cause = e.source();
+    while let Some(c) = cause {
+        out = format!("{out}: {c}");
+        cause = c.source();
+    }
+    out
 }
 
 /// Reads a response body, refusing one larger than `MAX_BODY` so a maker can't exhaust memory.
