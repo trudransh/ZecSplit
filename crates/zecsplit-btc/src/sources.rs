@@ -32,6 +32,11 @@ pub enum SourceError {
     TooFewSources,
 }
 
+/// Installs rustls' `ring` provider once per process; every reqwest client needs it (ADR-051).
+pub fn tls() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 fn bad(e: impl std::fmt::Display) -> SourceError {
     SourceError::BadResponse(e.to_string())
 }
@@ -207,6 +212,7 @@ struct RpcErr {
 
 impl BitcoindRpc {
     pub fn new(url: &str, user: &str, pass: &str) -> Result<Self, SourceError> {
+        tls();
         Ok(Self {
             http: reqwest::Client::builder().timeout(TIMEOUT).build()?,
             url: url.to_string(),
@@ -316,7 +322,7 @@ struct EsploraStatus {
 impl Esplora {
     /// A client for `base`; HTTPS through rustls on the `ring` provider (ADR-051).
     pub fn new(base: &str) -> Result<Self, SourceError> {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        tls();
         Ok(Self {
             http: reqwest::Client::builder().timeout(TIMEOUT).build()?,
             base: base.trim_end_matches('/').to_string(),
