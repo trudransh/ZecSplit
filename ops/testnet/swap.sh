@@ -32,7 +32,7 @@ gcloud compute ssh zecsplit-maker "${VM[@]}" --command "pkill -x zecsplit-maker 
   ZECSPLIT_MAKER_LIGHT_SERVER=http://127.0.0.1:9067 ZECSPLIT_MAKER_ZEC_PAYOUT=$(cat "$P/maker-zec-ua.txt") \
   ZECSPLIT_MAKER_LISTEN=127.0.0.1:7781 ZECSPLIT_MAKER_SATS_PER_ZEC=500000 \
   ZECSPLIT_MAKER_MIN_ZEC=1000000 ZECSPLIT_MAKER_MAX_ZEC=200000000 \
-  ZECSPLIT_MAKER_PASSPHRASE=\$BTC_RPC_PASS nohup ~/zecsplit-maker > ~/maker-data/maker.log 2>&1 &"
+  ZECSPLIT_MAKER_PASSPHRASE=\$BTC_RPC_PASS setsid nohup ~/zecsplit-maker < /dev/null > ~/maker-data/maker.log 2>&1 &"
 
 echo "== tunnel: maker 7781, light server 9067, bitcoind 38332"
 gcloud compute ssh zecsplit-maker "${VM[@]}" -- -N -o ExitOnForwardFailure=yes \
