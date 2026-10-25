@@ -17,6 +17,10 @@ use zecsplitd::http::{Access, router};
 use zecsplitd::maker_client::HttpMaker;
 use zecsplitd::runner::{Ports, ZecSweep};
 
+/// Seconds between ticks outside regtest: each tick asks the public Esplora about every swap
+/// transaction, and 10-minute signet blocks need nothing faster (ADR-053).
+const PUBLIC_TICK_SECS: u64 = 15;
+
 fn var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("{name} is not set"))
 }
@@ -112,13 +116,17 @@ async fn run() -> Result<(), String> {
     .map(|o| o.trim().to_string())
     .collect();
 
+    let every = Duration::from_secs(match network {
+        Network::Regtest => 1,
+        Network::Test | Network::MainBeta => PUBLIC_TICK_SECS,
+    });
     let ticker = engine.clone();
     tokio::spawn(async move {
         loop {
             for failure in ticker.lock().await.tick().await {
                 eprintln!("tick failed: {failure}");
             }
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(every).await;
         }
     });
     let socket = tokio::net::TcpListener::bind(listen)
