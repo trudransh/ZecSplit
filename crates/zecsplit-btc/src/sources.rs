@@ -314,7 +314,9 @@ struct EsploraStatus {
 }
 
 impl Esplora {
+    /// A client for `base`; HTTPS through rustls on the `ring` provider (ADR-051).
     pub fn new(base: &str) -> Result<Self, SourceError> {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         Ok(Self {
             http: reqwest::Client::builder().timeout(TIMEOUT).build()?,
             base: base.trim_end_matches('/').to_string(),
@@ -400,6 +402,14 @@ mod tests {
             }
         });
         format!("http://{addr}")
+    }
+
+    /// Live: the public signet Esplora over HTTPS (`cargo test -- --ignored`).
+    #[tokio::test]
+    #[ignore]
+    async fn esplora_signet_tip_over_https() {
+        let e = Esplora::new("https://mempool.space/signet/api").unwrap();
+        assert!(e.tip().await.unwrap() > 200_000);
     }
 
     #[tokio::test]

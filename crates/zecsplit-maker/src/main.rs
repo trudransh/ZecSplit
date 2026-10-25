@@ -5,14 +5,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
+use zcash_protocol::consensus::Network::TestNetwork;
 use zecsplit_btc::sources::{BitcoindRpc, BtcSource};
 use zecsplit_crypto::MakerSecret;
 use zecsplit_maker::http::router;
 use zecsplit_maker::ports::BitcoindWallet;
-use zecsplit_maker::runner::Ports;
+use zecsplit_maker::runner::{Ports, ZecNode};
 use zecsplit_maker::service::{Config, Service, owned_lock_server};
 use zecsplit_protocol::messages::Network;
 use zecsplit_protocol::recovery::SecretString;
+use zecsplit_protocol::session::btc_network;
 use zecsplit_store::Store;
 use zecsplit_zcash::{LockWallets, regtest};
 
@@ -33,8 +35,8 @@ async fn run() -> Result<(), String> {
         other => return Err(format!("unknown network {other}")),
     };
     owned_lock_server(network, &var("ZECSPLIT_MAKER_LIGHT_SERVER")?)?;
-    if network != Network::Regtest {
-        return Err("only regtest is supported yet".into());
+    if network == Network::MainBeta {
+        return Err("mainnet is cut (ADR-025)".into());
     }
     let mut identity = [0; 32];
     hex::decode_to_slice(var("ZECSPLIT_MAKER_IDENTITY")?, &mut identity)
@@ -55,14 +57,26 @@ async fn run() -> Result<(), String> {
     ]));
     let wallet = Box::leak(Box::new(BitcoindWallet::new(
         rpc(&format!("/wallet/{}", var("ZECSPLIT_MAKER_WALLET")?)).map_err(|e| e.to_string())?,
-        bitcoin::Network::Regtest,
+        btc_network(network),
     )));
-    let zec = Box::leak(Box::new(LockWallets::new(
-        regtest(),
-        zec_dir,
-        &var("ZECSPLIT_MAKER_LIGHT_SERVER")?,
-        &var("ZECSPLIT_MAKER_ZEC_PAYOUT")?,
-    )));
+    let (server, payout) = (
+        var("ZECSPLIT_MAKER_LIGHT_SERVER")?,
+        var("ZECSPLIT_MAKER_ZEC_PAYOUT")?,
+    );
+    let zec: &'static dyn ZecNode = match network {
+        Network::Regtest => Box::leak(Box::new(LockWallets::new(
+            regtest(),
+            zec_dir,
+            &server,
+            &payout,
+        ))),
+        Network::Test | Network::MainBeta => Box::leak(Box::new(LockWallets::new(
+            TestNetwork,
+            zec_dir,
+            &server,
+            &payout,
+        ))),
+    };
     let ports = Ports {
         sources,
         broadcast: node_rpc,
