@@ -23,8 +23,9 @@ ENGINE_DATA="$P/testnet-engine"
 mkdir -p "$ENGINE_DATA"
 
 echo "== maker binary to the VM, started there"
-gcloud compute scp "${VM[@]}" "$ROOT/target/release/zecsplit-maker" zecsplit-maker:~/zecsplit-maker
-gcloud compute ssh zecsplit-maker "${VM[@]}" --command "pkill -x zecsplit-maker || true; mkdir -p ~/maker-data && \
+gcloud compute scp "${VM[@]}" "$ROOT/target/release/zecsplit-maker" zecsplit-maker:~/zecsplit-maker.new
+timeout 60 gcloud compute ssh zecsplit-maker "${VM[@]}" --command "pkill -x zecsplit-maker; sleep 1; \
+  mv ~/zecsplit-maker.new ~/zecsplit-maker && mkdir -p ~/maker-data && \
   set -a && . ~/testnet/.env && set +a && \
   ZECSPLIT_MAKER_NETWORK=test ZECSPLIT_MAKER_IDENTITY=$(cat "$P/maker-identity.hex") \
   ZECSPLIT_MAKER_DATA=\$HOME/maker-data ZECSPLIT_MAKER_BITCOIND=http://127.0.0.1:38332 \
@@ -32,7 +33,7 @@ gcloud compute ssh zecsplit-maker "${VM[@]}" --command "pkill -x zecsplit-maker 
   ZECSPLIT_MAKER_LIGHT_SERVER=http://127.0.0.1:9067 ZECSPLIT_MAKER_ZEC_PAYOUT=$(cat "$P/maker-zec-ua.txt") \
   ZECSPLIT_MAKER_LISTEN=127.0.0.1:7781 ZECSPLIT_MAKER_SATS_PER_ZEC=500000 \
   ZECSPLIT_MAKER_MIN_ZEC=1000000 ZECSPLIT_MAKER_MAX_ZEC=200000000 \
-  ZECSPLIT_MAKER_PASSPHRASE=\$BTC_RPC_PASS setsid nohup ~/zecsplit-maker < /dev/null > ~/maker-data/maker.log 2>&1 &"
+  ZECSPLIT_MAKER_PASSPHRASE=\$BTC_RPC_PASS setsid nohup ~/zecsplit-maker < /dev/null > ~/maker-data/maker.log 2>&1 &" || true
 
 echo "== tunnel: maker 7781, light server 9067, bitcoind 38332"
 gcloud compute ssh zecsplit-maker "${VM[@]}" -- -N -o ExitOnForwardFailure=yes \
