@@ -1,0 +1,34 @@
+# Maker node stack for the live demo: Zcash testnet + Bitcoin signet, synced on a VM.
+# `docker compose up -d` on the VM; every port binds to 127.0.0.1 (no auth on these RPCs).
+
+services:
+  zebra:
+    image: zfnd/zebra:7.0.0-rc.0
+    restart: unless-stopped
+    volumes:
+      - ./zebrad.toml:/home/zebra/.config/zebrad.toml:ro
+      - zebra-state:/home/zebra/.cache/zebra
+    ports:
+      - "127.0.0.1:18232:18232"
+      - "127.0.0.1:9067:9067"
+
+  bitcoind:
+    image: bitcoin/bitcoin:31.1
+    restart: unless-stopped
+    command:
+      - -signet
+      - -server
+      - -txindex
+      - -fallbackfee=0.0001
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=0.0.0.0/0
+      - -rpcuser=zecsplit
+      - -rpcpassword=${BTC_RPC_PASS:?set BTC_RPC_PASS}
+    volumes:
+      - bitcoin-data:/home/bitcoin/.bitcoin
+    ports:
+      - "127.0.0.1:38332:38332"
+
+volumes:
+  zebra-state:
+  bitcoin-data:
