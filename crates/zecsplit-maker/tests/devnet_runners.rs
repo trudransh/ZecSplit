@@ -32,7 +32,7 @@ use common::{Link, pass};
 const NODE: &str = "http://127.0.0.1:18443";
 const LIGHT_SERVER: &str = "http://127.0.0.1:9067";
 const SCRIPTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../devnet/scripts");
-const ZEC_AMOUNT: u64 = 30_000_000;
+const ZEC_AMOUNT: u64 = 5_000_000;
 
 fn script(args: &[&str]) -> String {
     let out = Command::new(format!("{SCRIPTS}/{}", args[0]))
