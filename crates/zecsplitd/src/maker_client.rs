@@ -44,6 +44,7 @@ async fn body(mut res: reqwest::Response) -> Result<Vec<u8>, String> {
 
 impl HttpMaker {
     pub fn new(base: &str) -> Result<Self, String> {
+        zecsplit_btc::sources::tls();
         Ok(HttpMaker {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(60))

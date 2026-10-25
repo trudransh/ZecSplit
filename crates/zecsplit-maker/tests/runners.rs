@@ -551,6 +551,7 @@ fn api(engine: SharedEngine) -> axum::Router {
 /// a secret (INTERFACES §3), and the recovery file restores the swap in a fresh engine (§6.4).
 #[tokio::test(flavor = "multi_thread")]
 async fn t_034_engine_api_runs_s_01_and_never_returns_a_secret() {
+    zecsplit_btc::sources::tls();
     let chain: &'static FakeChain = Box::leak(Box::default());
     let zec: &'static FakeZcash = Box::leak(Box::default());
     let sources: &'static [&'static dyn BtcSource] =
