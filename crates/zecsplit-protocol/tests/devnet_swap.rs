@@ -22,7 +22,7 @@ const COMPOSE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../devnet/docker-compose.yml"
 );
-const ZEC_AMOUNT: u64 = 30_000_000;
+const ZEC_AMOUNT: u64 = 5_000_000;
 const NODE: &str = "http://127.0.0.1:18443";
 const T1: u16 = 20;
 const T2: u16 = 20;

@@ -102,22 +102,22 @@ async fn spec_4_3_r2_sums_notes_seen_through_the_lock_ufvk() {
     if !devnet() {
         return;
     }
-    let (_, _, _, keys, birthday) = funded_lock(30_000_000);
-    pay(&keys.ua, 20_000_000);
+    let (_, _, _, keys, birthday) = funded_lock(5_000_000);
+    pay(&keys.ua, 3_000_000);
 
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("lock.sqlite");
     let one = lock_status(&regtest(), &db, &keys.ufvk, birthday, LIGHT_SERVER, 1)
         .await
         .unwrap();
-    assert_eq!(one.total, 50_000_000, "both notes summed");
-    assert_eq!(one.confirmed, 50_000_000);
+    assert_eq!(one.total, 8_000_000, "both notes summed");
+    assert_eq!(one.confirmed, 8_000_000);
 
     let two = lock_status(&regtest(), &db, &keys.ufvk, birthday, LIGHT_SERVER, 2)
         .await
         .unwrap();
-    assert_eq!(two.total, 50_000_000);
-    assert_eq!(two.confirmed, 30_000_000);
+    assert_eq!(two.total, 8_000_000);
+    assert_eq!(two.confirmed, 5_000_000);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -125,7 +125,7 @@ async fn spec_4_5_r3_sweeps_the_lock_with_both_shares() {
     if !devnet() {
         return;
     }
-    let (s_a, s_b, sigma, keys, birthday) = funded_lock(30_000_000);
+    let (s_a, s_b, sigma, keys, birthday) = funded_lock(5_000_000);
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("lock.sqlite");
 
@@ -150,7 +150,7 @@ async fn spec_3_3_r1_single_share_rejected() {
     if !devnet() {
         return;
     }
-    let (s_a, s_b, _, keys, birthday) = funded_lock(10_000_000);
+    let (s_a, s_b, _, keys, birthday) = funded_lock(2_000_000);
     let dir = tempfile::tempdir().unwrap();
     for (name, half) in [("s_a", &s_a), ("s_b", &s_b)] {
         let db = dir.path().join(format!("{name}.sqlite"));
@@ -165,7 +165,7 @@ async fn spec_3_3_r1_wrong_sigma_rejected() {
     if !devnet() {
         return;
     }
-    let (s_a, s_b, sigma, keys, birthday) = funded_lock(10_000_000);
+    let (s_a, s_b, sigma, keys, birthday) = funded_lock(2_000_000);
     let wrong = match sigma {
         Sigma::Plus => Sigma::Minus,
         Sigma::Minus => Sigma::Plus,
