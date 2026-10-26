@@ -6,10 +6,10 @@ import { Logo } from "./logo";
 import { ThemeToggle } from "./theme-toggle";
 
 const LINKS = [
-  ["#zcash", "Why Zcash"],
-  ["#safety", "Safety"],
-  ["#privacy", "Privacy"],
-  ["#how", "How it works"],
+  ["/#zcash", "Why Zcash"],
+  ["/#safety", "Safety"],
+  ["/#privacy", "Privacy"],
+  ["/#how", "How it works"],
 ];
 
 export function Nav({ docs }: { docs: string }) {
