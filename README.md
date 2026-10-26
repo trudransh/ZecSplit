@@ -80,14 +80,31 @@ Built for the Zecathon (Cross-Chain track).
 
 | Piece | State |
 |---|---|
-| Cross-group DLEq, commit-reveal, proofs of knowledge | Done, unit tested (rogue-key and mismatched-twin attacks rejected) |
-| Shared-key Ironwood lock and sweep | Done, swept on a Zebra regtest chain |
-| Bitcoin script, 5 transactions, adaptor signatures | Done |
-| Alice and Bob state machines, write-ahead store, recovery file | Done; every state resumes after a crash |
-| Full swap on regtest (real BTC lock and redeem, real ZEC lock and sweep) | Done |
-| Engine and maker runners | Done in-process; real network ports in progress |
-| Engine HTTP API, maker service, web UI | In progress |
-| Testnet swap | Planned |
+| Cross-group DLEq, commit-reveal, proofs of knowledge | Done; rogue-key and mismatched-twin attacks rejected |
+| Shared-key Ironwood lock and sweep | Done, on regtest and on Zcash testnet |
+| Bitcoin script, 5 transactions, adaptor signatures | Done; redeem, cancel, refund and punish mined on regtest |
+| Alice and Bob state machines, write-ahead store, recovery file | Done; both sides resume after a crash at any state |
+| Engine (local HTTP API + SSE) and maker service | Done; separate processes over HTTP |
+| Every scenario on regtest through the real engine and maker | Done: happy path, maker never locks, taker never pays, maker blind to ZEC, maker never refunds, overpayment, crash every tick |
+| **Live swap on Zcash testnet + Bitcoin signet** | **Done** (txids below) |
+| Web UI | In progress |
+
+## Live on testnet
+
+Shielded testnet ZEC swapped for signet BTC, the maker on a cloud VM checking the lock on its own Zebra node, the taker's engine on a laptop with two Bitcoin sources.
+
+| Swap | Maker locks BTC (signet) | Taker pays ZEC (testnet) | Taker claims BTC (signet) | Maker sweeps ZEC (testnet) |
+|---|---|---|---|---|
+| 1 | [`dbc65938…`](https://mempool.space/signet/tx/dbc6593847db04dec256aca4dae00c8b5df6a478731d981291be2c7b7937cda1) | [`62cfea06…`](https://testnet.zcashexplorer.app/transactions/62cfea0652d9ec5675db266bcc28f6bac7e63b0ba0f2443b5a1cf03e1e88805c) | [`8968f8f0…`](https://mempool.space/signet/tx/8968f8f08afe3f0bce599b47115f28f42bd0d67ea04f1a92df9137fa525be35d) | [`22451c4e…`](https://testnet.zcashexplorer.app/transactions/22451c4e6e6c8e720ddfec7cc45756b76ed3e9cc95628773c08c3685e94a25e7) |
+
+Run your own with [`ops/testnet/swap.sh`](ops/testnet/swap.sh) against a maker you host ([`ops/testnet`](ops/testnet)).
+
+## How it has been attacked
+
+- **Model check.** Both state machines are driven through 20,000 random runs each, with reorgs, disagreeing Bitcoin sources, block jumps and hostile peer messages. After every step it checks the rules that keep funds safe: no payment request before a confirmed lock, no redeem inside the safety margin, no cancel against your own redeem, no sweep without the other side's secret, no abort after paying or locking. It found a real bug (a reorg could abort a taker who had already paid), now fixed.
+- **Fuzzing.** Mutated setup signatures, adaptor signatures, lock templates and reveals are all rejected, before and after the real one, and never leave a session unusable. The wire and recovery-file decoders take 60,000 random inputs without a panic.
+- **Adversarial tests** for a fake BTC lock, a maker checking ZEC on someone else's node, wrong ZEC amounts, a signature arriving inside the safety margin, a blocked refund (the taker punishes) and quote flooding.
+- **Privacy tests on real chains.** Every Zcash transaction has zero transparent and zero Sapling parts and exactly 2 Ironwood actions; no secret appears in any file the engine or maker writes; nothing asks a light server for a transaction by id.
 
 ## Architecture
 
@@ -115,15 +132,23 @@ flowchart BT
 - **Write-ahead.** Every state change is committed to SQLite before the message or broadcast it allows.
 - **Two Bitcoin sources.** The taker trusts a Bitcoin fact only when two independent sources agree.
 
-## Quickstart (devnet)
+## Judge kit
 
 Needs Rust 1.93, Docker and [`just`](https://github.com/casey/just).
 
 ```bash
+just devnet-up      # Zebra regtest (NU7) + bitcoind + a funded shielded wallet
+just demo           # 3 swaps between real engine and maker processes, privacy checks, then a refund; prints every txid
+```
+
+About 4 minutes once built (the first build of the Zcash crates takes longer).
+
+## Development
+
+```bash
 just setup          # enable the git hooks
-just check          # fmt, clippy, tests, cargo deny, secret scan
-just devnet-up      # Zebra regtest + bitcoind + a funded shielded wallet
-just devnet-test    # lock and sweep on Zcash, Bitcoin sources, full swap on regtest
+just check          # fmt, clippy, tests, cargo deny, secret scan (what CI runs)
+just devnet-test    # every scenario on regtest through the real engine and maker
 ```
 
 ## Docs
