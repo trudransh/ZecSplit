@@ -8,7 +8,7 @@ P="$ROOT/private"
 UI="${1:-http://localhost:3000}"
 # shellcheck disable=SC1091
 . "$P/testnet.env"
-REFUND="$(docker run --rm -v "$P/taker-wallet:/wallet" devnet-zec-wallet:latest \
+REFUND="$(cat "$P/taker-zec-ua.txt" 2>/dev/null || docker run --rm -v "$P/taker-wallet:/wallet" devnet-zec-wallet:latest \
     zcash-devtool wallet -w /wallet list-addresses 2>/dev/null | grep -o 'utest1[a-z0-9]*' | head -1)"
 MAKER_KEY="$(curl -s http://127.0.0.1:7781/v1/info | python3 -c 'import sys,json;print(json.load(sys.stdin)["maker_key"])')"
 mkdir -p "$P/testnet-engine"
