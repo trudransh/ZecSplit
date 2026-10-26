@@ -146,6 +146,18 @@ async fn t_034_engine_api_runs_s_01_and_never_returns_a_secret() {
         .await
         .unwrap();
     assert_eq!(foreign.status().as_u16(), 403, "foreign origin");
+    let preflight = reqwest::Client::new()
+        .request(reqwest::Method::OPTIONS, format!("{base}/api/health"))
+        .header("origin", UI)
+        .header("access-control-request-private-network", "true")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        preflight.headers()["access-control-allow-private-network"],
+        "true",
+        "a public UI may reach the loopback engine"
+    );
 
     let short = json!({"passphrase": "short"});
     let (status, _) = call(&base, post.clone(), "/api/unlock", Some(short), &mut seen).await;

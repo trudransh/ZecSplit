@@ -60,7 +60,8 @@ fn token(req: &Request) -> Option<&str> {
 }
 
 /// INTERFACES §3 security: a foreign `Origin` is refused outright, then every call needs the
-/// token. Allowed origins get CORS headers, since the UI is served from its own origin.
+/// token. Allowed origins get CORS headers and Private Network Access consent, since the UI may be
+/// served from a public site while the engine listens on loopback (ADR-055).
 async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> Response {
     let origin = req.headers().get(header::ORIGIN).cloned();
     if let Some(o) = &origin
@@ -86,6 +87,10 @@ async fn guard(State(access): State<Arc<Access>>, req: Request, next: Next) -> R
         h.insert(
             header::ACCESS_CONTROL_ALLOW_METHODS,
             HeaderValue::from_static("GET, POST"),
+        );
+        h.insert(
+            "access-control-allow-private-network",
+            HeaderValue::from_static("true"),
         );
     }
     res
