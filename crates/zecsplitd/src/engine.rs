@@ -216,7 +216,6 @@ pub struct Engine {
     passphrase: Option<SecretString>,
     runners: HashMap<[u8; 32], AliceRunner>,
     quotes: HashMap<[u8; 32], Quote>,
-    // ponytail: in memory, so after a restart the UI asks again; a column if that annoys.
     recovery_saved: HashSet<[u8; 32]>,
     /// Restored swaps never show a payment request: the user may have paid already.
     restored: HashSet<[u8; 32]>,
@@ -598,11 +597,9 @@ impl Engine {
                 "this swap is already here",
             ));
         }
-        // The file exists only once setup completed (ADR-040); the first tick finds the rest.
         let state = serde_json::to_string(&AliceState::SigsExchanged).map_err(internal)?;
         let network = serde_json::to_string(&quote.network).map_err(internal)?;
         let now = now();
-        // Secret first: a swap row without one is aborted on resume.
         self.store
             .put_secret(&id, &seal(&bundle, pass.clone()).map_err(internal)?)
             .map_err(internal)?;
