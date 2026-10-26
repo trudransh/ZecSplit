@@ -3,10 +3,9 @@ import { HeroArt, Ruler } from "@/components/hero-art";
 import { BitcoinMark, Logo, ZcashMark } from "@/components/logo";
 import { Nav } from "@/components/nav";
 import { Observers } from "@/components/observers";
-import { Ocean } from "@/components/ocean";
 import { RouteScene } from "@/components/route-scene";
+import { SiteFooter } from "@/components/site-footer";
 
-const REPO = "https://github.com/Raveesh1007/Splitzec";
 const DOCS = "https://zecsplit.gitbook.io/zecsplit-docs";
 
 const ROUTES: { n: string; tab: string; scene: "bridge" | "exchange" | "pool"; lead: string[]; body: string; chips: string[] }[] = [
@@ -344,23 +343,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="footer">
-        <Ocean className="ocean" />
-        <div className="ocean-bar">
-          <span>© 2026 ZecSplit · MIT or Apache-2.0</span>
-          <nav aria-label="Footer">
-            <a href="#how">How it works</a>
-            <a href="#privacy">Privacy</a>
-            <a href={DOCS} target="_blank" rel="noreferrer">
-              Docs
-            </a>
-            <a href={REPO} target="_blank" rel="noreferrer">
-              GitHub
-            </a>
-          </nav>
-          <span>Testnet only · Unaudited</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }
