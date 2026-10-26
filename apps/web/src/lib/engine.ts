@@ -42,6 +42,16 @@ export class EngineError extends Error {
   }
 }
 
+/** ADR-002: the engine runs on this computer, so a link or a typed address can never point the page at someone else's server. */
+export function isLocalEngine(base: string): boolean {
+  try {
+    const u = new URL(base);
+    return u.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export class HttpEngine implements Engine {
   readonly demo = false;
 
@@ -51,6 +61,9 @@ export class HttpEngine implements Engine {
   ) {}
 
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    if (!isLocalEngine(this.base)) {
+      throw new EngineError("ENGINE_NOT_LOCAL", "The engine must run on this computer (127.0.0.1 or localhost).");
+    }
     let res: Response;
     try {
       res = await fetch(this.base + path, {
@@ -95,6 +108,7 @@ export class HttpEngine implements Engine {
     return this.call<SwapView>("GET", `/api/swaps/${id}`);
   }
   watch(id: string, on: (view: SwapView) => void) {
+    if (!isLocalEngine(this.base)) return () => {};
     // EventSource can't set headers, so the token rides in the query (INTERFACES §3).
     const es = new EventSource(`${this.base}/api/swaps/${id}/events?token=${encodeURIComponent(this.token)}`);
     es.onmessage = (e) => on(JSON.parse(e.data) as SwapView);
