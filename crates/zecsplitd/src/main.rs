@@ -104,13 +104,11 @@ async fn run() -> Result<(), String> {
     };
     let token_file = data.join("ui-token");
     std::fs::write(&token_file, &token).map_err(|e| e.to_string())?;
-    let origins = var_or(
-        "ZECSPLIT_ENGINE_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    )
-    .split(',')
-    .map(|o| o.trim().to_string())
-    .collect();
+    let ui = var_or("ZECSPLIT_ENGINE_UI", "http://localhost:3000");
+    let origins = var_or("ZECSPLIT_ENGINE_ORIGINS", &ui)
+        .split(',')
+        .map(|o| o.trim().trim_end_matches('/').to_string())
+        .collect();
 
     let ticker = engine.clone();
     tokio::spawn(async move {
@@ -124,9 +122,11 @@ async fn run() -> Result<(), String> {
     let socket = tokio::net::TcpListener::bind(listen)
         .await
         .map_err(|e| format!("{listen}: {e}"))?;
+    // INTERFACES §3: the token reaches the UI in the URL fragment, which browsers never send.
     eprintln!(
-        "engine listening on {listen}; UI token in {}",
-        token_file.display()
+        "engine listening on {listen}; UI token in {}\nopen {}/swap#engine=http://{listen}&token={token}",
+        token_file.display(),
+        ui.trim_end_matches('/'),
     );
     axum::serve(socket, router(engine, Access { token, origins }))
         .await
