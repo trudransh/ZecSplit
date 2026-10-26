@@ -273,7 +273,6 @@ impl BtcSource for BitcoindRpc {
             None => None,
             Some(hash) => {
                 let h = self.call("getblockheader", json!([hash])).await?;
-                // A block off the active chain reports -1 confirmations.
                 match h["confirmations"].as_i64() {
                     Some(c) if c > 0 => h["height"].as_u64().and_then(|n| u32::try_from(n).ok()),
                     _ => None,

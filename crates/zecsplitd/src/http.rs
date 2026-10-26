@@ -151,7 +151,6 @@ async fn events(State(e): State<Shared>, Path(id): Path<String>) -> Response {
     if let Err(r) = e.lock().await.swap(&id) {
         return refusal(r);
     }
-    // ponytail: polls the view every second; a change channel from the runners if it lags.
     let stream = futures_util::stream::unfold((e, id, String::new()), |(e, id, last)| async move {
         loop {
             let view = e.lock().await.swap(&id).ok()?;
