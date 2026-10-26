@@ -1,0 +1,18 @@
+# Keeps the testnet maker up through judging: restarts on failure and on boot.
+# Install: ops/testnet/install-maker.sh (writes ~/maker.env from ~/testnet/.env and the maker's settings).
+[Unit]
+Description=ZecSplit maker (Zcash testnet + Bitcoin signet)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=%i
+EnvironmentFile=/home/%i/maker.env
+ExecStart=/home/%i/zecsplit-maker
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/%i/maker-data/maker.log
+StandardError=append:/home/%i/maker-data/maker.log
+
+[Install]
+WantedBy=multi-user.target

@@ -24,7 +24,10 @@ mkdir -p "$ENGINE_DATA"
 
 echo "== maker binary to the VM, started there"
 gcloud compute scp "${VM[@]}" "$ROOT/target/release/zecsplit-maker" zecsplit-maker:~/zecsplit-maker.new
-timeout 60 gcloud compute ssh zecsplit-maker "${VM[@]}" --command "pkill -x zecsplit-maker; sleep 1; \
+timeout 60 gcloud compute ssh zecsplit-maker "${VM[@]}" --command "if systemctl is-enabled -q zecsplit-maker@\$USER 2>/dev/null; then \
+  sudo systemctl stop zecsplit-maker@\$USER; mv ~/zecsplit-maker.new ~/zecsplit-maker; \
+  sudo systemctl start zecsplit-maker@\$USER; exit 0; fi; \
+  pkill -x zecsplit-maker; sleep 1; \
   mv ~/zecsplit-maker.new ~/zecsplit-maker && mkdir -p ~/maker-data && \
   set -a && . ~/testnet/.env && set +a && \
   ZECSPLIT_MAKER_NETWORK=test ZECSPLIT_MAKER_IDENTITY=$(cat "$P/maker-identity.hex") \
