@@ -13,7 +13,7 @@ const DOCS = "https://zecsplit.gitbook.io/zecsplit-docs";
 export default function SwapPage() {
   return (
     <>
-      <Nav docs={DOCS} />
+      <Nav docs={DOCS} cta={false} />
       <main className="wrap swap-page">
         <header className="swap-head">
           <span className="mono-label">
