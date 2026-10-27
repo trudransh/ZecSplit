@@ -12,7 +12,7 @@ const LINKS = [
   ["/#how", "How it works"],
 ];
 
-export function Nav({ docs }: { docs: string }) {
+export function Nav({ docs, cta = true }: { docs: string; cta?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -39,9 +39,11 @@ export function Nav({ docs }: { docs: string }) {
           </a>
         </nav>
         <ThemeToggle />
-        <Link href="/swap" className="btn btn-dark btn-sm">
-          Start swap <span className="arrow">→</span>
-        </Link>
+        {cta && (
+          <Link href="/swap" className="btn btn-dark btn-sm">
+            Start swap <span className="arrow">→</span>
+          </Link>
+        )}
       </div>
     </header>
   );

@@ -1,14 +1,14 @@
-import { Ocean } from "./ocean";
+import { Pond } from "./pond";
 
 const REPO = "https://github.com/Raveesh1007/Splitzec";
 const DOCS = "https://zecsplit.gitbook.io/zecsplit-docs";
 
-/** The shark ocean with a link bar, shared by every page. */
+/** The koi pond with a link bar, shared by every page. */
 export function SiteFooter() {
   return (
     <footer className="footer">
-      <Ocean className="ocean" />
-      <div className="ocean-bar">
+      <Pond className="pond" />
+      <div className="pond-bar" data-koi-avoid>
         <span>© 2026 ZecSplit · MIT or Apache-2.0</span>
         <nav aria-label="Footer">
           <a href="/#how">How it works</a>
