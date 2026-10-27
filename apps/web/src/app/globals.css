@@ -1102,29 +1102,20 @@ h2.center {
   position: relative;
   height: max(680px, min(100svh, 1000px));
   overflow: hidden;
-  --ocean-bg: #ffffff;
-  --ocean-grid: rgba(32, 22, 19, 0.07);
-  --ocean-fish: 40, 34, 30;
-  background: var(--ocean-bg);
-  border-top: 1px solid var(--line);
+  /* The pond is always night, in daoho.dev's colours. */
+  background: #1a1917;
+  color-scheme: dark;
 }
 
-:root[data-theme="dark"] .footer {
-  --ocean-bg: #000000;
-  --ocean-grid: rgba(255, 255, 255, 0.055);
-  --ocean-fish: 230, 238, 255;
-}
-
-.ocean {
+.pond {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
-  font-family: "Geist Mono", ui-monospace, Menlo, monospace;
 }
 
-.ocean-bar {
+.pond-bar {
   position: absolute;
   inset: auto 0 0;
   display: flex;
@@ -1133,23 +1124,20 @@ h2.center {
   gap: 16px 24px;
   flex-wrap: wrap;
   padding: 18px var(--gutter);
-  background: color-mix(in srgb, var(--ocean-bg) 82%, transparent);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: rgba(236, 228, 218, 0.42);
 }
 
-.ocean-bar nav {
+.pond-bar nav {
   display: flex;
   gap: 22px;
 }
 
-.ocean-bar a:hover {
-  color: var(--ink);
+.pond-bar a:hover {
+  color: rgb(236, 228, 218);
 }
 
 .swap-page {
@@ -1886,7 +1874,7 @@ label.form {
   .dark-tab {
     padding: 22px 80px 0 24px;
   }
-  .ocean-bar {
+  .pond-bar {
     justify-content: center;
     text-align: center;
   }
