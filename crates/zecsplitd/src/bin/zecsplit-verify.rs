@@ -42,8 +42,7 @@ async fn check(path: &str, esplora: Option<&str>) -> Res<()> {
     let base = match (esplora, record.quote.network) {
         (Some(url), _) => url,
         (None, Network::Test) => "https://mempool.space/signet/api",
-        (None, Network::MainBeta) => "https://mempool.space/api",
-        (None, Network::Regtest) => return Err("regtest: pass an Esplora URL".into()),
+        (None, _) => return Err("pass an Esplora URL for this network".into()),
     };
     let txid = Txid::from_str(&record.redeem_txid)?;
     let redeem = Esplora::new(base)?
