@@ -4,45 +4,52 @@
 
 <h1 align="center">ZecSplit</h1>
 
-<p align="center">
-  <b>Swap shielded ZEC for BTC with nobody in the middle who can freeze or steal it.</b>
-</p>
+> **Swap shielded ZEC for native BTC. Nobody in the middle can freeze it or take it.**
+>
+> A trustless atomic swap between the Zcash Ironwood pool and Bitcoin: no bridge, no custodian, no wrapped coin, no transparent Zcash address.
+> Only Bitcoin's timelocks and Zcash's consensus decide who ends up with what.
 
-<p align="center">
-  <a href="https://github.com/trudransh/Splitzec/actions/workflows/ci.yml"><img src="https://github.com/trudransh/Splitzec/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License">
-  <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
-  <img src="https://img.shields.io/badge/networks-regtest%20%7C%20testnet-lightgrey" alt="Networks">
-  <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-read-blue" alt="Docs"></a>
-</p>
+[![CI](https://github.com/trudransh/Splitzec/actions/workflows/ci.yml/badge.svg)](https://github.com/trudransh/Splitzec/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
+![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
+![Networks](https://img.shields.io/badge/networks-regtest%20%7C%20testnet-lightgrey)
+
+[The app](https://zecsplit.vercel.app) · [the video](VIDEO_URL) · [the docs](docs/README.md) · [the evidence](evidence/testnet) · [run it yourself](#run-it-yourself)
 
 > [!WARNING]
 > **Pre-alpha. Regtest and testnet only. Unaudited.** Do not use with real funds.
 
-## For judges
+## For judges (5 minutes)
 
-1. **Proof on public chains.** Four swaps and one timelock refund on Zcash testnet + Bitcoin signet, every transaction linked in [Live on testnet](#live-on-testnet). The fourth swap ran through the hosted web UI.
-2. **The UI.** [zecsplit.vercel.app](https://zecsplit.vercel.app). The page is only a screen: a real swap needs the engine running on your own computer, because that is where the keys live. *Try the demo* is a simulation with no chain behind it.
-3. **Run a real swap yourself, no coins needed.** With Docker and Rust, `just judge` starts a private regtest world on your machine (Zebra, bitcoind, a maker and your engine) and prints a link that opens the hosted UI against it. See [Judge kit](#judge-kit).
-4. **The cryptography, checked against the chain.** `just verify` (Rust only, no Docker) takes the public record of each testnet swap, checks both cross-group DLEq proofs and all six proofs of knowledge, fetches `tx_redeem` from mempool.space and recovers the taker's key share from it, the step that lets the maker sweep the ZEC. See [`evidence/testnet`](evidence/testnet).
-5. **Privacy, checked on real chains.** Every Zcash transaction in a swap is Ironwood only: 0 transparent, 0 Sapling, 0 Orchard parts. The raw testnet transactions and a one-line check are in [`evidence/testnet`](evidence/testnet); no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
+1. **Watch** [the video](VIDEO_URL): a swap in the web app, then the proof on public explorers.
+2. **Check a timelock on a public chain, nothing to install** (`curl` and `jq`). Swap `d9c9794f` was abandoned after the maker locked BTC; its cancel could only be mined 36 blocks after the lock, and was:
 
-The name means a *split key*: the ZEC sits under a spend key split between the two parties. Nothing to do with splitting bills.
+   ```bash
+   M=https://mempool.space/signet/api/tx; L=d1dcc58c246451446b20f6a305f4e2697cbd0ad605d9e8a3ddfceb59fab3e5a8
+   curl -s $M/efed99572f863eb1782088da7a8e1b2ebe17b0f3265fd970325a04f8dd28659a | jq -r --arg l $L \
+     --argjson h "$(curl -s $M/$L/status | jq .block_height)" \
+     '"spends the lock: \(.vin[0].txid == $l), nSequence: \(.vin[0].sequence), mined \(.status.block_height - $h) blocks after it"'
+   ```
 
-## What it is
+3. **Check the cryptography against the chain** (Rust, no Docker): `just verify` takes the public record of each of our four testnet swaps, checks both cross-group DLEq proofs and all six proofs of knowledge, fetches `tx_redeem` from mempool.space and recovers the taker's key share from the signature in it: the step that lets the maker sweep the ZEC. Change one byte of a record and it fails.
+4. **Run a full swap in the web app, no coins needed** (Docker and Rust): `just judge` starts a private regtest world on your machine and opens [the app](https://zecsplit.vercel.app) against it. About 2 minutes per swap.
+5. **Real and simulated, in one line:** the four swaps and the refund ran on Zcash testnet and Bitcoin signet with real keys, proofs and signatures; the app's *Try the demo* button is a simulation with no chain behind it ([the full list](#what-is-real-and-what-is-simulated)).
+6. **Read on:** [the live run on the explorers](#the-live-run-on-the-explorers), [the raw evidence](evidence/testnet), [the protocol](docs/protocol.md), [the threat model](docs/security/threat-model.md), [the limits](#limits).
 
-ZecSplit is a trustless atomic swap between **shielded ZEC** (Zcash Ironwood pool) and **BTC**. No bridge, no custodian, no wrapped coin and no transparent Zcash address at any point.
+The name means a *split key*: the ZEC sits under a spend key split between the two parties.
 
-Shielded Zcash has no scripting language, so it can't hold a hash-locked contract. ZecSplit adapts the Bitcoin–Monero protocol of Gugger (2020) instead:
+## What it does
 
-- The ZEC is locked to a fresh shielded address whose spending key is `ask = σ·(s_a + s_b)`, the sum of two secret shares. Alice holds `s_a`, Bob holds `s_b`, and neither can spend alone.
-- Every condition (redeem, cancel after `t1`, refund, punish after `t2`) lives in **Bitcoin script**.
-- Each Bitcoin spending path reveals **exactly one share** to the other party through an ECDSA adaptor signature. Whoever learns the missing share can sweep the ZEC.
-- A cross-group discrete-log equality proof ties each share on Pallas (Zcash) to its twin on secp256k1 (Bitcoin), so neither side can cheat with mismatched keys.
+Shielded Zcash has no scripting language, so it can't hold a hash-locked contract. ZecSplit ports the Bitcoin–Monero protocol of Gugger (2020), the one COMIT and eigenwallet have run since 2021:
 
-On Zcash, a swap is two ordinary shielded transactions. Nothing on the Zcash chain links them to the Bitcoin side.
+- The ZEC is paid to a fresh shielded address whose spend key is `ask = σ·(s_a + s_b)`. Alice holds `s_a`, Bob holds `s_b`; neither can spend alone.
+- Bitcoin holds the conditions: a 2-of-2 output, and transactions both sides sign before any coin moves, with relative timelocks for cancel (`t1`) and punish (`t2`).
+- Each Bitcoin spend reveals **exactly one share** to the other party through an ECDSA adaptor signature. Whoever learns the missing share sweeps the ZEC.
+- A cross-group discrete-log equality proof ties each share on Pallas (Zcash) to its twin on secp256k1 (Bitcoin), so nobody can cheat with mismatched keys.
 
-## How a swap works
+On Zcash, a swap is two ordinary shielded transactions, unlinked to the Bitcoin side. The keys live in an engine on your own computer; the web app is only a screen.
+
+### How a swap works
 
 Alice has ZEC and wants BTC (the taker). Bob has BTC and wants ZEC (the maker).
 
@@ -76,32 +83,22 @@ If something goes wrong, the timelocks decide:
 | Bob goes silent after Alice pays | After `t1`, Alice cancels. Bob's `tx_refund` reveals `s_b` | Bob gets BTC back, Alice sweeps her ZEC back |
 | Bob never refunds | After `t2`, Alice's `tx_punish` | Alice takes the BTC; the ZEC stays locked |
 
-## What a swap proves, and what it doesn't
 
-| A completed swap proves | It does not prove |
+## What works today
+
+| Flow | Result |
 |---|---|
-| Neither party could take both coins | That the price was fair: the signed quote only proves the maker offered it |
-| The ZEC never touched a transparent address | That the BTC side is private (Bitcoin is public) |
-| Bitcoin facts were agreed by at least two independent sources | Anything about the code: it is unaudited |
+| Happy path | 4 swaps on Zcash testnet + Bitcoin signet, the 4th through the hosted web app |
+| Maker abandons after locking | Cancel mined at exactly `t1` on signet, then the maker's refund |
+| Every failure path | Maker never locks, taker never pays, maker silent after payment (taker sweeps ZEC back), maker never refunds (taker punishes), overpayment: on regtest through the real engine and maker |
+| Crash and resume | Both sides rebuilt from SQLite before every block, at every state |
+| Public verification | `zecsplit-verify` re-derives each testnet swap's atomicity from public data |
+| Web app | Connect, quote, recovery file, ZIP 321 QR, live progress, receipt; hosted, talking only to `127.0.0.1` |
+| Judge kit | `just judge`: devnet, maker and engine on one machine, driven from the hosted app |
 
-## Status
+## The live run on the explorers
 
-Built for the Zecathon (Cross-Chain track).
-
-| Piece | State |
-|---|---|
-| Cross-group DLEq, commit-reveal, proofs of knowledge | Done; rogue-key and mismatched-twin attacks rejected |
-| Shared-key Ironwood lock and sweep | Done, on regtest and on Zcash testnet |
-| Bitcoin script, 5 transactions, adaptor signatures | Done; redeem, cancel, refund and punish mined on regtest |
-| Alice and Bob state machines, write-ahead store, recovery file | Done; both sides resume after a crash at any state |
-| Engine (local HTTP API + SSE) and maker service | Done; separate processes over HTTP |
-| Every scenario on regtest through the real engine and maker | Done: happy path, maker never locks, taker never pays, maker blind to ZEC, maker never refunds, overpayment, crash every tick |
-| **Live swap on Zcash testnet + Bitcoin signet** | **Done** (txids below) |
-| Web UI (landing + swap) | Done |
-
-## Live on testnet
-
-Shielded testnet ZEC swapped for signet BTC, the maker on a cloud VM checking the lock on its own Zebra node, the taker's engine on a laptop with two Bitcoin sources.
+The maker ran on a cloud VM and checked the ZEC lock on its own Zebra node; the taker's engine ran on a laptop.
 
 | Swap | Maker locks BTC (signet) | Taker pays ZEC (testnet) | Taker claims BTC (signet) | Maker sweeps ZEC (testnet) |
 |---|---|---|---|---|
@@ -110,19 +107,31 @@ Shielded testnet ZEC swapped for signet BTC, the maker on a cloud VM checking th
 | 3 | [`27024c5d…`](https://mempool.space/signet/tx/27024c5da837cb9ed1dc4eeda2c2f128d4692418e9dea07000f0bdee7af48f9a) | [`abdb747f…`](https://testnet.zcashexplorer.app/transactions/abdb747f0f471fd6a9844940c2db95ef43e68c5362a8a99912ed19f57e189aa6) | [`dce3fce1…`](https://mempool.space/signet/tx/dce3fce1aa550cab3b3e7e2b190b1a2b4388f51104471d375252fcfaf29b3d35) | [`85af11f5…`](https://testnet.zcashexplorer.app/transactions/85af11f506ee0fbf558b2f9d612f7bef1d05d68d027186bb8c02208d528a2c30) |
 | 4 (web UI) | [`7e91162a…`](https://mempool.space/signet/tx/7e91162ab130a637f22cde5be9c86517f9b475d6be5473fa6892415ced5cfc8a) | [`e3585ecb…`](https://testnet.zcashexplorer.app/transactions/e3585ecb7f233cb4f3ef4a1d89fec486768330e66beaddb4d4427a91a437ca46) | [`e54c639f…`](https://mempool.space/signet/tx/e54c639f355efa075fa80319b465789fb2528c7ef383393822356a534f052f2b) | [`2e264fe9…`](https://testnet.zcashexplorer.app/transactions/2e264fe99a1864169301fc8dad0e950ac8550cc2f5630f01b8d08f09154168b7) |
 
-**A refund on a public chain.** Swap `d9c9794f` stopped after the maker locked BTC and before any ZEC was paid. Nobody cooperated; the timelocks finished it:
+The refund, with nobody cooperating:
 
 | Maker locks BTC | Cancel, valid only from `t1` = 36 blocks after the lock | Maker's refund |
 |---|---|---|
 | [`d1dcc58c…`](https://mempool.space/signet/tx/d1dcc58c246451446b20f6a305f4e2697cbd0ad605d9e8a3ddfceb59fab3e5a8) at block 328056 | [`efed9957…`](https://mempool.space/signet/tx/efed99572f863eb1782088da7a8e1b2ebe17b0f3265fd970325a04f8dd28659a) at block 328092 | [`1503cf53…`](https://mempool.space/signet/tx/1503cf53e194fd1affae7f481f3f7b08057315daae8b84652dc96c2ae5a5ceab) at block 328093 |
 
-How these ran, and what it means for trust:
+Raw JSON of all 19 transactions, the Ironwood-only check and the swap records: [`evidence/testnet`](evidence/testnet).
 
-- The maker ran on a cloud VM and checked the ZEC lock on its own Zebra node. The taker's engine ran on a laptop.
-- The taker's two Bitcoin sources were the maker's bitcoind and the public mempool.space signet API. Both must agree before the taker acts, so a lying maker node can only stall a swap, never make the taker pay early.
-- The taker's Zcash light server was the maker's. The taker only uses it on the refund path, so in a refund the maker would see the taker's sweep. A taker-owned light server replaces it after the hackathon.
+## What is real and what is simulated
 
-The operator runbook is in [`ops/testnet`](ops/testnet); it expects your own maker VM and wallets. For a testnet session against our maker, open an issue.
+**Real**, on Zcash testnet (NU7, Ironwood) and Bitcoin signet:
+
+- The shared-key lock address and the sweep with both shares, through PCZT.
+- The cross-group DLEq proofs, commit-reveal and the six proofs of knowledge.
+- The Bitcoin 2-of-2 output, the five transactions, ECDSA adaptor signatures and the relative timelocks.
+- The engine (`zecsplitd`) and the maker (`zecsplit-maker`) as separate processes over HTTP, each with a write-ahead SQLite store.
+- The web app, hosted on Vercel and driving a local engine.
+
+**Not real, or not yet:**
+
+- *Try the demo* in the app: a simulation, labelled as one, with no transactions.
+- The regtest suite and the judge kit: real nodes, but private chains.
+- Independence of the taker's Bitcoin sources on testnet: one was the maker's own bitcoind (the other mempool.space). Both must agree, so a lying node can only stall a swap.
+- Liquidity: one maker, ours.
+- Mainnet: none.
 
 ## How it has been attacked
 
@@ -131,7 +140,7 @@ The operator runbook is in [`ops/testnet`](ops/testnet); it expects your own mak
 - **Adversarial tests** for a fake BTC lock, a maker checking ZEC on someone else's node, wrong ZEC amounts, a signature arriving inside the safety margin, a blocked refund (the taker punishes) and quote flooding.
 - **Privacy tests on real chains.** Every Zcash transaction has zero transparent, Sapling and Orchard parts, only Ironwood actions (the maker's sweep always has exactly 2); no secret appears in any file the engine or maker writes; nothing asks a light server for a transaction by id.
 
-## Architecture
+## Repository layout
 
 ```mermaid
 flowchart BT
@@ -153,41 +162,44 @@ flowchart BT
     store --> maker
 ```
 
-- **The browser holds no keys.** The local engine runs the swap and owns every secret. The web UI only shows engine state.
+- **The browser holds no keys.** The local engine runs the swap and owns every secret.
 - **Write-ahead.** Every state change is committed to SQLite before the message or broadcast it allows.
-- **Two Bitcoin sources.** The taker trusts a Bitcoin fact only when two independent sources agree.
+- **Two Bitcoin sources.** The taker acts on a Bitcoin fact only when both agree.
 
-## Judge kit
+| Path | What |
+|---|---|
+| `crates/` | The Rust workspace above |
+| `apps/web` | The web app (Next.js static export) |
+| `devnet/` | Zebra regtest + bitcoind + wallet, and the judge kit |
+| `evidence/testnet` | Raw testnet transactions and swap records |
+| `docs/` | The documentation |
+| `ops/testnet` | The maker VM's stack and runbook |
+| `vendor/` | Serai `dleq` and `pasta_curves`, vendored ([CREDITS](CREDITS.md)) |
+
+## Run it yourself
 
 Needs Rust 1.93, Docker and [`just`](https://github.com/casey/just).
 
-Run a swap yourself in the hosted UI, against a private regtest world on your machine:
-
 ```bash
-just judge          # devnet + maker + your engine, mines blocks, prints the UI link and a BTC address
-just judge-pay '<zcash: link under the QR>'   # pays the QR from the devnet wallet
+just judge                                     # devnet + maker + your engine; prints the app link and a BTC address
+just judge-pay '<zcash: link under the QR>'    # pays the QR from the devnet wallet, in a second terminal
+just verify                                    # checks the four testnet swap records against signet
+just devnet-up && just demo                    # scripted: 3 swaps, privacy checks, a refund; prints every txid
 ```
 
-Or the scripted run, no browser:
+The first build of the Zcash crates takes several minutes. Development: `just setup` (git hooks), `just check` (what CI runs), `just devnet-test` (every scenario on regtest).
 
-```bash
-just devnet-up      # Zebra regtest (NU7) + bitcoind + a funded shielded wallet
-just demo           # 3 swaps between real engine and maker processes, privacy checks, then a refund; prints every txid
-```
+## Limits
 
-About 4 minutes once built (the first build of the Zcash crates takes longer).
-
-## Development
-
-```bash
-just setup          # enable the git hooks
-just check          # fmt, clippy, tests, cargo deny, secret scan (what CI runs)
-just devnet-test    # every scenario on regtest through the real engine and maker
-```
+- Pre-alpha, unaudited, regtest and testnet only.
+- One maker. Its API is plain HTTP; our testnet runs went through an SSH tunnel. Put HTTPS or Tor in front of it.
+- On testnet the taker's Zcash light server was the maker's. It is used only on the refund path, where the maker would see the taker's sweep.
+- A completed swap proves neither party could take both coins. It doesn't prove the price was fair, and the Bitcoin side is as public as any Bitcoin payment.
+- A testnet swap takes 45–90 minutes, mostly Bitcoin confirmations.
 
 ## Docs
 
-Full documentation: **[docs/](docs/README.md)** in this repo, also at [zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/).
+[docs/](docs/README.md) in this repo, mirrored at [zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/).
 
 | Start here | |
 |---|---|
