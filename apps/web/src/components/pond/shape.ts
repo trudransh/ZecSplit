@@ -14,7 +14,7 @@ export interface ShapeHit {
   da: number;
 }
 
-// Top-down outline as a fraction of length: blunt round head, plump shoulders, narrow tail stalk.
+/** Top-down outline as a fraction of length: blunt round head, plump shoulders, narrow tail stalk. */
 export function bodyHalfWidth(s: number) {
   if (s < 0.12) return 0.11 * Math.pow(Math.sin(((s / 0.12) * Math.PI) / 2), 0.55);
   if (s < 0.3) return 0.11 + 0.025 * smoothstep(0.12, 0.3, s);
@@ -23,7 +23,7 @@ export function bodyHalfWidth(s: number) {
 
 const BODY_END = 0.74;
 
-// Butterfly tail: fans out from the stalk, with a V notch in the trailing edge.
+/** Butterfly tail: fans out from the stalk, with a V notch in the trailing edge. */
 function tailHalfWidth(s: number) {
   return 0.03 + 0.15 * Math.pow(smoothstep(0.7, 1, s), 0.8);
 }
@@ -55,7 +55,6 @@ export function classify(s: number, a: number, past: number, flare: number, out:
   out.du = 1;
   out.da = 0;
 
-  // Barbels: a short whisker angling out from each corner of the mouth, the tell that this is a koi.
   if (ahead > 0) {
     if (ahead < 0.05 && Math.abs(lateral - (0.045 + ahead * 0.7)) < 0.016) {
       out.flag = FLAG_BARBEL;
@@ -89,8 +88,6 @@ export function classify(s: number, a: number, past: number, flare: number, out:
   );
 }
 
-// ── sharks ──────────────────────────────────────────────────────────────
-// Top-down outlines after stackedlol/ascii-sharks, all as fractions of length.
 
 export const FLAG_GILL = 6;
 export const FLAG_MARK = 7;

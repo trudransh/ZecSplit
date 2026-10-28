@@ -17,7 +17,6 @@ export function parseCoin(text: string): number | null {
 export function when(unix: number) {
   const d = new Date(unix * 1000);
   return {
-    // dateStyle/timeStyle can't be combined with timeZoneName, so the fields are spelled out.
     local: d.toLocaleString(undefined, {
       day: "numeric",
       month: "short",

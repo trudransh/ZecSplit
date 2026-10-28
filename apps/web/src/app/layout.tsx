@@ -15,7 +15,7 @@ export const viewport: Viewport = {
   themeColor: "#f9f9f7",
 };
 
-// Runs before paint so a stored dark choice never flashes light first.
+/** Runs before paint so a stored dark choice never flashes light first. */
 const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem("theme")||"light"}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

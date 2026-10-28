@@ -30,7 +30,7 @@ import {
 
 type Rgb = [number, number, number];
 
-// How visible a koi stays while it swims under page content.
+/** How visible a koi stays while it swims under page content. */
 const DIM_UNDER_CONTENT = 0.15;
 
 interface Palette {
@@ -81,9 +81,9 @@ const DARK: Palette = {
   ink: 0.42,
 };
 
-// Dense glyphs etched into each skin tile, sparse where it catches the light.
+/** Dense glyphs etched into each skin tile, sparse where it catches the light. */
 const TILE_GLYPHS = "t%SX8@#";
-// Sharks carry the two coins of the swap in their skin, one coin per shark.
+/** Sharks carry the two coins of the swap in their skin, one coin per shark. */
 const SHARK_GLYPHS = ["t%ⓩⓩ8@#", "t%₿₿8@#"];
 
 /** Shark skin from above, and the colour of its markings. Dark palette only: the footer pond is always night. */
@@ -95,7 +95,7 @@ const SHARK_SKIN: Record<SharkKind, { skin: Rgb; mark: Rgb }> = {
 };
 const SUBSAMPLES = [0.25, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75];
 
-// A line glyph that follows a direction in screen space, for fin rays and ripple rings.
+/** A line glyph that follows a direction in screen space, for fin rays and ripple rings. */
 function lineGlyph(dx: number, dy: number) {
   const d = Math.hypot(dx, dy) || 1;
   if (Math.abs(dy) < 0.38 * d) return "-";
@@ -204,7 +204,6 @@ export class KoiRenderer {
   private arcTotal = 1;
   private flareLeft = 1;
   private flareRight = 1;
-  // Scratch outputs of sample(), to avoid allocating per sample.
   private hit: ShapeHit = { flag: 0, across: 1, du: 1, da: 0 };
   private hitS = 0;
   private hitV = 0;
@@ -221,7 +220,6 @@ export class KoiRenderer {
 
   resize(width: number, height: number, dpr: number) {
     this.dpr = dpr;
-    // Near-square tiles, large enough to read each etched glyph.
     this.cw = clamp(Math.round(width / 125), 8, 12);
     this.ch = this.cw + 2;
     this.cols = Math.ceil(width / this.cw);
@@ -273,7 +271,6 @@ export class KoiRenderer {
     this.cellGlyph.fill(0);
     this.cellTileAlpha.fill(0);
     this.cellShadow.fill(0);
-    // Deeper koi first, so the ones near the surface glide over them.
     for (const k of [...world.koi].sort((a, b) => a.depth - b.depth)) this.rasterizeKoi(k, world.time);
     this.depositWake(world);
     this.diffuse(dt);
@@ -317,7 +314,6 @@ export class KoiRenderer {
     return r * this.cols + c;
   }
 
-  // ── koi ─────────────────────────────────────────────────────────────
 
   /** Find the nearest point on the render spine, then classify it against the koi's outline. */
   private sample(px: number, py: number, L: number, from = 0, to = KOI_NODES - 2) {
@@ -371,9 +367,7 @@ export class KoiRenderer {
   private skin(k: Koi, s: number, v: number, across: number): Rgb {
     const p = this.palette;
     const vn = v / k.length;
-    // Belly edges and the tail stalk stay white on every variety, which frames the markings.
     if (across > 0.9 || s > 0.74) return p.white;
-    // Ragged edges, so patches read as painted markings rather than ellipses.
     const wobble = (valueNoise(s * 14 + k.id, vn * 30, k.id + 3) - 0.5) * 0.6;
     const markings = this.markings(k);
     for (const m of markings.black) if (inPatch(m, s, vn, wobble)) return p.black;
@@ -395,10 +389,8 @@ export class KoiRenderer {
       this;
     const L = k.length;
     const nodes = k.nodes;
-    // The body only undulates while the tail is beating; coasting koi hold almost straight.
     const swim = 0.2 + 1.1 * k.beat;
 
-    // Travelling body wave that grows toward the tail.
     for (let n = 0; n < KOI_NODES; n++) {
       const s = n / (KOI_NODES - 1);
       const a = Math.max(0, n - 1);
@@ -419,7 +411,6 @@ export class KoiRenderer {
         arc[n - 1] + Math.hypot(spine[n * 2] - spine[(n - 1) * 2], spine[n * 2 + 1] - spine[(n - 1) * 2 + 1]);
     }
     this.arcTotal = arc[KOI_NODES - 1] || 1;
-    // Pectorals tuck in during a burst, scull in turn while coasting, and the inner one spreads to brake on a turn.
     const spread = 1 - 0.25 * k.beat;
     const scull = 0.18 * (1 - k.beat) * Math.sin(k.finPhase);
     const bank = clamp(k.turn * 0.6, -0.35, 0.35);
@@ -438,7 +429,6 @@ export class KoiRenderer {
     }
     this.shark = k.shark ? SHARKS[k.shark] : null;
     const halfWidth = this.shark ? this.shark.halfWidth : bodyHalfWidth;
-    // Shark pectorals and the hammerhead's head reach farther from the spine than koi fins.
     const reach = L * (this.shark ? 0.36 : 0.26);
     const c0 = Math.max(0, Math.floor((minX - reach) / cw));
     const c1 = Math.min(cols - 1, Math.floor((maxX + reach) / cw));
@@ -447,7 +437,6 @@ export class KoiRenderer {
     if (c0 > c1 || r0 > r1) return;
 
     const diag = Math.hypot(cw, ch);
-    // Near the surface a koi is brighter and its shadow falls farther away on the floor.
     const shadowDc = Math.round((L * 0.07 * k.depth) / cw) + 1;
     const shadowDr = Math.round((L * 0.05 * k.depth) / ch) + 1;
     const dim = palette.alpha * (palette.depthFloor + (1 - palette.depthFloor) * k.depth);
@@ -459,14 +448,11 @@ export class KoiRenderer {
         const x = c * cw;
         const y = r * ch;
         const centerHit = this.sample(x + cw / 2, y + ch / 2, L);
-        // Nothing reaches far from the spine at the waist, where the fins end.
         const finReach = this.shark ? reach : L * (this.hitS > 0.4 && this.hitS < 0.62 ? 0.15 : 0.25);
         if (!centerHit && this.hitDist > finReach + diag) {
-          // Distance to the spine changes by at most a cell per cell, so skip cells that can't reach it.
           c += Math.max(0, Math.floor((this.hitDist - reach - diag) / cw));
           continue;
         }
-        // Sub-samples sit within a cell of the centre, so only the neighbouring segments can be nearest.
         const from = Math.max(0, this.hitSeg - 2);
         const to = Math.min(KOI_NODES - 2, this.hitSeg + 2);
         let { flag, across } = hit;
@@ -476,10 +462,8 @@ export class KoiRenderer {
         let ty = this.hitTy;
 
         let hits = centerHit ? 1 : 0;
-        // Points from the cell centre toward the covered side, i.e. across the outline into the koi.
         let gx = 0;
         let gy = 0;
-        // Cells well inside the body can't have a sub-sample outside it, so skip straight to full coverage.
         const deepInside =
           centerHit &&
           flag !== FLAG_FIN &&
@@ -508,7 +492,6 @@ export class KoiRenderer {
         const side = v >= 0 ? 1 : -1;
 
         const i = r * cols + c;
-        // Body-anchored key so each glyph rides along with the skin.
         const key = (hash3(Math.round(s * 90), Math.round(v / (cw * 0.8)), k.id) * 4294967295) >>> 0;
         const solid = centerHit && coverage >= 0.6;
 
@@ -525,7 +508,6 @@ export class KoiRenderer {
             if (sc < cols && sr < rows) this.cellShadow[sr * cols + sc] = 1;
           }
         } else if (flag === FLAG_BARBEL) {
-          // Drawn along the whisker: forward from the mouth and angled out to its side.
           glyph = lineGlyph(-tx - side * ty * 0.7, -ty + side * tx * 0.7);
           rgb = shade(mix(palette.bg, palette.fin, 0.9), palette.ink + 0.3);
         } else if (flag === FLAG_EYE && solid) {
@@ -534,7 +516,6 @@ export class KoiRenderer {
           glyph = "o";
           rgb = mix(palette.bg, palette.white, 0.9);
         } else if (flag === FLAG_FIN) {
-          // Fins are a pale veil of tiles flecked with dots, so they never compete with the body.
           tile = mix(palette.bg, palette.fin, 0.55);
           tileAlpha = dim * 0.45 * coverage;
           if (key % 2 === 0) {
@@ -542,18 +523,12 @@ export class KoiRenderer {
             alpha *= 0.6 * coverage;
           }
         } else {
-          // Each skin cell is a tile washed in the skin colour, shaded like a rounded back lit from
-          // the top-left, with a dense glyph etched on top. Edge cells get a paler, empty tile.
           const skin = this.skin(k, s, v, across);
           const facing = side * (0.6 * ty - 0.8 * tx) * across;
           const lum = clamp(0.22 + 0.5 * Math.sqrt(1 - across * across) + 0.18 * facing, 0, 1);
           if (skin === palette.red) {
-            // Red patches run the full hi ramp: crimson in shadow, vermilion across the back, orange
-            // to amber where the light hits. Each koi leans a little redder or more orange, and a
-            // slow body-pinned noise varies the hue within a patch, like real pigment.
             const lean = (hash3(k.id, 5, 17) - 0.5) * 0.3;
             const grain = (valueNoise(s * 9 + k.id, (v / L) * 18, k.id + 21) - 0.5) * 0.25;
-            // A band of shine travels down the body, like light sliding over wet scales.
             const sheen = Math.max(0, Math.sin(s * 11 - t * 1.8 + k.id) - 0.7) / 0.3;
             tile = ramp(palette.hi, 0.15 + 0.8 * lum + lean + grain + sheen * 0.35);
           } else {
@@ -571,9 +546,7 @@ export class KoiRenderer {
               const jitter = (key >>> 4) % 3;
               glyph = TILE_GLYPHS[clamp(Math.round((1 - lum) * 4) + jitter, 0, TILE_GLYPHS.length - 1)];
               rgb = shade(tile, palette.ink);
-              // White skin is etched lightly so the red and black patches carry the pattern.
               if (skin === palette.white) alpha *= 0.6;
-              // Scales glint on a staggered clock.
               const tick = Math.floor(t * 1.4 + (key % 997) / 97);
               if (hash3(key, tick, 7) < 0.03) tile = mix(tile, palette.bg, 0.45);
             }
@@ -622,7 +595,6 @@ export class KoiRenderer {
       return cell;
     }
     if (flag === FLAG_FIN) {
-      // Shark fins are solid, darkening toward the tip; a blacktip's tips are ink black.
       const colour = kind === "blacktip" && across > 0.62 ? mark : skin;
       cell.tile = mix(p.bg, colour, 0.6 - 0.2 * across);
       cell.tileAlpha = dim * 0.7 * coverage;
@@ -633,7 +605,6 @@ export class KoiRenderer {
       }
       return cell;
     }
-    // A rounded back lit from the top-left, like the koi; the dorsal fin catches the most light.
     const facing = side * (0.6 * ty - 0.8 * tx) * across;
     let lum = clamp(0.2 + 0.5 * Math.sqrt(1 - across * across) + 0.18 * facing, 0, 1);
     let colour = skin;
@@ -678,7 +649,6 @@ export class KoiRenderer {
     }
   }
 
-  // ── water ───────────────────────────────────────────────────────────
 
   private depositWake(world: World) {
     const { energy } = this;
@@ -780,7 +750,6 @@ export class KoiRenderer {
       const age = world.time - p.born;
       if (!p.landed) {
         const fall = age / p.landAt;
-        // Drawn a little above where it will land, closing in as it drops.
         const i = this.cellIndex(p.x, p.y - (1 - fall) * ch * 1.5);
         if (i < 0 || cellGlyph[i]) continue;
         this.glyphAt(i, fall < 0.5 ? "'" : ".", palette.pellet, palette.alpha * (0.5 + 0.4 * fall));

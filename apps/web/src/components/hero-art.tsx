@@ -27,7 +27,7 @@ export function HeroArt() {
   );
 }
 
-// Deadlines live on Bitcoin (PROTOCOL_SPEC §4.4, §5.3), so the ruler counts blocks, not hours.
+/** Deadlines live on Bitcoin (PROTOCOL_SPEC §4.4, §5.3), so the ruler counts blocks, not hours. */
 export function Ruler() {
   return (
     <div className="ruler" aria-hidden="true">

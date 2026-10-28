@@ -7,11 +7,11 @@ import { World, type Box } from "./pond/world";
 const STEP = 1 / 60;
 const MAX_STEPS = 4;
 const INTERACTIVE = "a, button, input, textarea, select, label, [role='button'], [data-koi-ignore]";
-// Content over the pond carries this attribute; koi steer around it and fade beneath it.
+/** Content over the pond carries this attribute; koi steer around it and fade beneath it. */
 const AVOID_TARGETS = "[data-koi-avoid]";
-// Re-measure the content boxes this often, in frames, to follow layout shifts and entrance animations.
+/** Re-measure the content boxes this often, in frames, to follow layout shifts and entrance animations. */
 const MEASURE_EVERY_FRAMES = 30;
-// Content boxes closer than this merge, so koi aren't squeezed into the slot between them.
+/** Content boxes closer than this merge, so koi aren't squeezed into the slot between them. */
 const MERGE_GAP_PX = 160;
 
 function mergeNearby(boxes: Box[]) {
@@ -125,7 +125,6 @@ class PondEngine {
     this.raf = requestAnimationFrame(this.frame);
   };
 
-  // Reduced motion: let the koi spread out, then hold a single frame.
   private drawStill() {
     if (this.world.time < 4) {
       for (let i = 0; i < 240; i++) this.world.step(STEP);
@@ -153,11 +152,8 @@ class PondEngine {
     p.active = inside && e.pointerType !== "touch";
   };
 
-  // Clicks on empty space drop food; links, buttons, and text selection are left alone.
   private onClick = (e: MouseEvent) => {
     if (this.reducedMotion.matches) return;
-    // The path recorded at dispatch, not target.closest(): a control that re-renders as it's clicked (the theme
-    // toggle swaps its icon) can leave the target detached, with no ancestors left to find the button through.
     if (e.composedPath().some((n) => n instanceof Element && n.matches(INTERACTIVE))) return;
     if (window.getSelection()?.toString()) return;
     const { x, y, inside } = this.toLocal(e);

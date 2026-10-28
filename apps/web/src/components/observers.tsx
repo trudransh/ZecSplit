@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// PRIVACY.md §1, in plain words.
+/** PRIVACY.md §1, in plain words. */
 const OBSERVERS = [
   {
     name: "The Zcash chain",
