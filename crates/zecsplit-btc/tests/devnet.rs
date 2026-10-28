@@ -97,7 +97,6 @@ async fn spec_6_3_r1_rebroadcast_is_a_no_op_on_regtest() {
     let addr = addr.as_str().unwrap();
     let tx = signed_payment(&wallet, addr).await;
     let txid = tx.compute_txid();
-    // Signed now: once tx confirms, the wallet no longer has its inputs to sign with.
     let mut conflict = tx.clone();
     conflict.output[0].value -= Amount::from_sat(500);
     for input in &mut conflict.input {
@@ -117,6 +116,5 @@ async fn spec_6_3_r1_rebroadcast_is_a_no_op_on_regtest() {
     let tip = node.tip().await.unwrap();
     assert_eq!(node.tx(&txid).await.unwrap().unwrap().height, Some(tip));
 
-    // A different spend of the same inputs is a real rejection, not a no-op.
     assert!(node.broadcast(&conflict).await.is_err());
 }
