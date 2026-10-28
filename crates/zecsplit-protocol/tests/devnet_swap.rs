@@ -318,7 +318,6 @@ async fn t_024_cancel_then_refund_on_regtest() {
     let cancel = bob.signed_cancel().unwrap();
     let cancel_txid = timelocked(&cancel, height_of(&lock_txid) + u32::from(T1)).await;
 
-    // Standard policy enforces low-S, so bitcoind accepting it checks the decrypted sig_A (item 5).
     let refund = bob.signed_refund().unwrap();
     node().broadcast(&refund).await.unwrap();
     mine_btc(1);
@@ -326,7 +325,6 @@ async fn t_024_cancel_then_refund_on_regtest() {
     assert_eq!(height_of(&refund_txid), tip());
     assert_eq!(received(&bob_refund), refund.output[0].value.to_sat());
 
-    // recover_share checks the share against Bob's public share, so Ok means s_b came back.
     alice.ask_from_refund(&refund).unwrap();
     println!("refund path: lock {lock_txid}, cancel {cancel_txid}, refund {refund_txid}");
 }
