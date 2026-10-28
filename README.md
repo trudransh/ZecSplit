@@ -34,7 +34,8 @@
 3. **Check the cryptography against the chain** (Rust, no Docker): `just verify` takes the public record of each of our four testnet swaps, checks both cross-group DLEq proofs and all six proofs of knowledge, fetches `tx_redeem` from mempool.space and recovers the taker's key share from the signature in it: the step that lets the maker sweep the ZEC. Change one byte of a record and it fails.
 4. **Run a full swap in the web app, no coins needed** (Docker and Rust): `just judge` starts a private regtest world on your machine and opens [the app](https://zecsplit.vercel.app) against it. About 2 minutes per swap.
 5. **Real and simulated, in one line:** the four swaps and the refund ran on Zcash testnet and Bitcoin signet with real keys, proofs and signatures; the app's *Try the demo* button is a simulation with no chain behind it ([the full list](#what-is-real-and-what-is-simulated)).
-6. **Read on:** [the live run on the explorers](#the-live-run-on-the-explorers), [the raw evidence](evidence/testnet), [the protocol](docs/protocol.md), [the threat model](docs/security/threat-model.md), [the limits](#limits).
+6. **Step by step:** [the judge guide](docs/judges.md) covers all three paths (no install, Rust only, full local swap) with expected output and fixes.
+7. **Read on:** [the live run on the explorers](#the-live-run-on-the-explorers), [the raw evidence](evidence/testnet), [the protocol](docs/protocol.md), [the threat model](docs/security/threat-model.md), [the limits](#limits).
 
 The name means a *split key*: the ZEC sits under a spend key split between the two parties.
 
