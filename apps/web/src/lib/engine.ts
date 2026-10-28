@@ -1,4 +1,3 @@
-// The swap page's only contract with the engine (INTERFACES §3). Types come from ts-rs.
 import type { CreateSwapRequest } from "../../../../packages/engine-api/src/CreateSwapRequest";
 import type { CreateSwapResponse } from "../../../../packages/engine-api/src/CreateSwapResponse";
 import type { Health } from "../../../../packages/engine-api/src/Health";
@@ -109,7 +108,6 @@ export class HttpEngine implements Engine {
   }
   watch(id: string, on: (view: SwapView) => void) {
     if (!isLocalEngine(this.base)) return () => {};
-    // EventSource can't set headers, so the token rides in the query (INTERFACES §3).
     const es = new EventSource(`${this.base}/api/swaps/${id}/events?token=${encodeURIComponent(this.token)}`);
     es.onmessage = (e) => on(JSON.parse(e.data) as SwapView);
     return () => es.close();

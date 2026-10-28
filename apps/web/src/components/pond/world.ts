@@ -17,7 +17,7 @@ export function angleDiff(a: number, b: number) {
   return d;
 }
 
-// Deterministic integer hash to [0, 1), so textures stay pinned to the body.
+/** Deterministic integer hash to [0, 1), so textures stay pinned to the body. */
 export function hash3(x: number, y: number, z: number) {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1442695041);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -127,7 +127,6 @@ function repel(boxes: Box[], x: number, y: number, margin: number, out: { x: num
     let d = Math.hypot(ox, oy);
     if (d > margin) continue;
     if (d < 1e-3) {
-      // Inside the box: head for the nearest edge.
       const edges = [b.left - x, x - b.right, b.top - y, y - b.bottom];
       const nearest = edges.indexOf(Math.max(...edges));
       ox = nearest === 0 ? -1 : nearest === 1 ? 1 : 0;
@@ -177,7 +176,6 @@ export class World {
     const minSide = Math.min(W, H);
     const baseLength = clamp(minSide * 0.5, 170, 420);
     const count = clamp(Math.round((W * H) / 240000), 3, 5);
-    // Wide screens also get a couple of young koi that keep to the deep water, for a sense of depth.
     const young = W >= 1024 ? 2 : 0;
 
     const sharks: SharkKind[] = (["greathammer", "mako", "tiger", "blacktip"] as SharkKind[])
@@ -235,7 +233,6 @@ export class World {
   feed(x: number, y: number) {
     this.lastFeed = this.time;
     this.ripples.push({ x, y, born: this.time, strength: 0.35 });
-    // A full pond takes no more food, rather than dropping old pellets out from under koi already going for them.
     const count = Math.min(5 + Math.floor(Math.random() * 3), MAX_PELLETS - this.pellets.length);
     for (let k = 0; k < count; k++) {
       const a = rand(0, TAU);
@@ -264,7 +261,6 @@ export class World {
         if (t - p.born < p.landAt) continue;
         p.landed = true;
         this.ripples.push({ x: p.x, y: p.y, born: t, strength: 0.1 });
-        // The splash is what koi react to: every koi in range turns and bolts for it at once.
         for (const k of this.koi) {
           if (!k.shark && Math.hypot(k.nodes[0] - p.x, k.nodes[1] - p.y) < RUSH_RANGE) k.rush = 1;
         }
@@ -297,8 +293,6 @@ export class World {
     const isShark = k.shark !== null;
     const food = isShark ? null : this.pickFood(k, hx, hy, Math.max(L * 1.6 + 220, k.rush > 0 ? RUSH_RANGE : 0));
 
-    // A fast swipe close by spooks a koi: it bolts away, then calms down over a couple of seconds.
-    // A koi already going for food ignores it; feeding beats fear, and clicking to feed moves the mouse fast.
     const pointerD = Math.hypot(pointer.x - hx, pointer.y - hy);
     const feeding = time - this.lastFeed < FEED_CALM;
     if (!food && !feeding && pointer.active && pointer.speed > STARTLE_SPEED && pointerD < L * 0.9) {
@@ -306,7 +300,6 @@ export class World {
       k.fleeX = pointer.x;
       k.fleeY = pointer.y;
     }
-    // A shark gliding close spooks a koi the same way, unless it's busy eating.
     if (!isShark && !food) {
       for (const o of this.koi) {
         if (!o.shark) continue;
@@ -346,7 +339,6 @@ export class World {
       const d = Math.hypot(tx, ty) || 1;
       const range = 300;
       if (d < range) {
-        // Swim up to the cursor, then circle under it rather than parking.
         const w = k.curiosity * (1 - d / range) * 2.2;
         const near = clamp(d / (L * 0.6), 0, 1);
         dx += ((tx / d) * near - (ty / d) * (1 - near)) * w;
@@ -364,7 +356,6 @@ export class World {
         const ox = hx - other.nodes[n * 2];
         const oy = hy - other.nodes[n * 2 + 1];
         const d = Math.hypot(ox, oy);
-        // Koi going for food jostle in close, so personal space shrinks and never outweighs the pull.
         const range = (L + other.length) * (food ? 0.12 : 0.28);
         if (d < range && d > 1e-3) {
           const w = (1 - d / range) * 2.4;
@@ -372,19 +363,16 @@ export class World {
           dy += (oy / d) * w;
         }
       }
-      // Loose shoaling: nearby koi drift the same way.
       if (!chasing && !other.shark === !isShark && Math.hypot(ohx - hx, ohy - hy) < L * 1.6) {
         dx += Math.cos(other.heading) * 0.18;
         dy += Math.sin(other.heading) * 0.18;
       }
     }
 
-    // Drift around page content rather than under it; food and the cursor can still lure them across.
     repel(this.avoid, hx, hy, L * 0.4, push);
     dx += push.x * (chasing || curious ? 0.5 : 1.8);
     dy += push.y * (chasing || curious ? 0.5 : 1.8);
 
-    // Let the body slip off-screen now and then, but always turn back.
     const over = Math.max(-hx, hx - W, -hy, hy - H);
     if (over > -L * 0.25) {
       const w = clamp((over + L * 0.25) / (L * 0.5), 0, 1) * 3.5;
@@ -396,7 +384,6 @@ export class World {
     }
 
     const desired = Math.atan2(dy, dx);
-    // Long bodies can't pivot on the spot: the turning circle grows with length.
     const agility =
       (1 + k.rush * 0.6) *
       Math.min(fleeing ? 3 : chasing ? 1.9 + closing : curious ? 1.2 : 0.7, (k.speed / L) * 4);
@@ -405,15 +392,12 @@ export class World {
     k.heading += turned;
     k.turn += (turned / dt - k.turn) * Math.min(1, dt * 3);
 
-    // Burst and coast: a few strong tail beats, then a long glide that bleeds off speed.
-    // Chasing or fleeing koi beat without pause.
     if (time > k.nextBurst && time > k.burstUntil) {
       k.burstUntil = time + rand(0.7, 1.6);
       k.nextBurst = k.burstUntil + rand(1.2, 4);
     }
     const bursting = fleeing || chasing || isShark || time < k.burstUntil;
     k.beat += ((bursting ? 1 : 0) - k.beat) * Math.min(1, dt * 3);
-    // Tail beats near the surface push small rings out behind the koi; gliding or deep koi leave none.
     if (k.beat > 0.6 && k.depth > 0.65 && time > k.nextWake) {
       const tail = (KOI_NODES - 3) * 2;
       this.ripples.push({ x: nodes[tail], y: nodes[tail + 1], born: time, strength: 0.25 + 0.2 * k.depth });
@@ -437,8 +421,6 @@ export class World {
     k.finPhase += dt * 2.4;
     k.gulp += ((chasing && closing > 0.55 ? 1 : 0) - k.gulp) * Math.min(1, dt * 6);
 
-    // Koi drift between the deep and the surface, and rise for food.
-    // Sharks keep deep, but now and then rise to the surface for a few seconds and glide over the koi.
     if (time > k.nextDive) {
       const surface = isShark && k.depthTarget < 1 && Math.random() < 0.4;
       k.depthTarget = surface ? 1 : rand(0.5, k.depthMax);

@@ -117,8 +117,6 @@ export function SwapApp() {
     [enter],
   );
 
-  // The link zecsplitd prints carries the engine address and session token in the fragment,
-  // which never leaves the browser; it's kept for this tab only.
   useEffect(() => {
     const hash = new URLSearchParams(location.hash.slice(1));
     const params = new URLSearchParams(location.search);

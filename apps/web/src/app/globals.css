@@ -615,13 +615,11 @@ h2.center {
   background: #f4c55e;
 }
 
-/* Room at the top for a caption of up to three lines, and at the bottom for the title chip. */
 .scene3d.is-compact .scene3d-canvas {
   inset: 64px 0 80px;
   height: calc(100% - 144px);
 }
 
-/* The case buttons make this caption tall, so the scene gets the space above it. */
 .scene3d.is-full .scene3d-canvas {
   inset: 0 0 190px;
   height: calc(100% - 190px);
@@ -1102,7 +1100,6 @@ h2.center {
   position: relative;
   height: max(680px, min(100svh, 1000px));
   overflow: hidden;
-  /* The pond is always night, in daoho.dev's colours. */
   background: #1a1917;
   color-scheme: dark;
 }

@@ -282,7 +282,6 @@ function Stepper({ view }: { view: SwapView }) {
 
 /** UX_SPEC §2.5: one screen for the whole swap, driven by the engine's view model. */
 export function SwapProgress({ engine, view }: { engine: Engine; view: SwapView }) {
-  // UX_SPEC §1.1: say so when nothing needs the user, and only then.
   const idle = !view.outcome && !view.error && view.recovery_saved && !view.zip321_uri;
   return (
     <div className="progress">

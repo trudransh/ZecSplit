@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BTC_PATH, ZEC_PATH } from "./ascii-coins";
 
-// Each scene is a small three.js story in steps, with a caption saying what just happened.
+/** Each scene is a small three.js story in steps, with a caption saying what just happened. */
 type Name = "bridge" | "exchange" | "pool" | "safety" | "notes" | "split" | "adaptor";
 type Three = typeof import("three");
 
@@ -120,8 +120,6 @@ function kit(T: Three, scene: import("three").Scene) {
     });
     const rim = new T.MeshStandardMaterial({ color: kind === "zec" ? "#c9971f" : "#d97a10", metalness: 0.6, roughness: 0.35 });
     const cap = new T.MeshStandardMaterial({ map: face, metalness: 0.35, roughness: 0.4 });
-    // Separate faces instead of cylinder caps: a circle's UVs keep the logo upright, and the
-    // back face is turned half a revolution so it reads correctly too as the coin spins.
     const edge = new T.CylinderGeometry(0.3, 0.3, 0.07, 48, 1, true);
     edge.rotateX(Math.PI / 2);
     const disc = new T.CircleGeometry(0.3, 48);
@@ -480,7 +478,6 @@ function safety(T: Three, k: Kit): Story {
   zecLock.group.position.set(0, 1.05, 0);
   k.label("shared ZEC address", GOLD, 0.15).position.set(0, 1.86, 0.3);
 
-  // The block clock: blocks fill the track; T1 and T2 are posts on it.
   const blockX = (i: number) => -2.45 + i * 0.44;
   const blocks = Array.from({ length: 12 }, (_, i) => {
     const b = k.add(new T.Mesh(new T.BoxGeometry(0.3, 0.2, 0.2), new T.MeshStandardMaterial({ color: "#f7931a" })));
@@ -739,12 +736,10 @@ function mount(T: Three, host: HTMLDivElement, name: Name, onPhase: (p: number) 
   const steps = STORY[name].length;
 
   const resize = () => {
-    // The canvas, not the host: CSS leaves room in the host for captions.
     const { width, height } = renderer.domElement.getBoundingClientRect();
     if (width < 1 || height < 1) return;
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
-    // Back off until the scene's whole area fits the card.
     const half = 2 * Math.tan((camera.fov * Math.PI) / 360);
     const dist = Math.max(h / half, w / (half * camera.aspect)) + 1.2;
     camera.position.set(0, lookY + 1.6, dist);
@@ -830,7 +825,6 @@ export function RouteScene({
 
   useEffect(() => {
     let cancelled = false;
-    // Labels are drawn into canvases, which don't trigger a webfont load on their own.
     Promise.all([import("three"), document.fonts?.load(`500 64px "JetBrains Mono Variable"`)]).then(([T]) => {
       if (!cancelled && host.current) control.current = mount(T, host.current, name, setPhase);
     });
