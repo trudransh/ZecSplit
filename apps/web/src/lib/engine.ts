@@ -201,8 +201,8 @@ export class DemoEngine implements Engine {
     this.swapsById.set(q.quote_id, {
       created: Date.now(),
       paidAt: null,
-      lockTxid: hex(32),
-      redeemTxid: hex(32),
+      lockTxid: "demo-lock-not-on-any-chain",
+      redeemTxid: "demo-claim-not-on-any-chain",
       view: {
         swap_id: q.quote_id,
         network: "test",
@@ -295,7 +295,7 @@ export class DemoEngine implements Engine {
         lock.confirmations = { have: 1, need: 1 };
         v.steps[2].deadline = deadline;
         v.zip321_uri = v.recovery_saved
-          ? `zcash:utest1demo${s.lockTxid.slice(0, 40)}?amount=${(v.zec_amount / 1e8).toString()}`
+          ? `zcash:utest1demo-not-a-real-address?amount=${(v.zec_amount / 1e8).toString()}`
           : null;
       } else if (paid < 5) {
         set([C, C, C, "waiting", "pending", "pending"]);

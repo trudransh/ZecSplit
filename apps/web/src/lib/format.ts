@@ -33,6 +33,7 @@ export function when(unix: number) {
 export const short = (h: string, n = 8) => (h.length > n * 2 + 1 ? `${h.slice(0, n)}…${h.slice(-n)}` : h);
 
 export function explorer(network: Network, txid: string): string | null {
+  if (!/^[0-9a-f]{64}$/.test(txid)) return null;
   if (network === "test") return `https://mempool.space/signet/tx/${txid}`;
   if (network === "main_beta") return `https://mempool.space/tx/${txid}`;
   return null;
