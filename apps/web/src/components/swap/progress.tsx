@@ -321,10 +321,12 @@ export function SwapProgress({ engine, view }: { engine: Engine; view: SwapView 
 
       <Stepper view={view} />
 
-      <p className="window-note">
-        If the maker disappears, your ZEC comes back automatically, as long as the engine runs at some point
-        between <At unix={view.refund_window.opens_at} /> and <At unix={view.refund_window.closes_at} />.
-      </p>
+      {!view.outcome && (
+        <p className="window-note">
+          If the maker disappears, your ZEC comes back automatically, as long as the engine runs at some point
+          between <At unix={view.refund_window.opens_at} /> and <At unix={view.refund_window.closes_at} />.
+        </p>
+      )}
     </div>
   );
 }
