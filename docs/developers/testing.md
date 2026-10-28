@@ -33,6 +33,7 @@ How ZecSplit is tested, and the scenario scoreboard.
 | ADV-07          | Maker's refund delayed or blocked                               | The taker punishes at `t2`                                  |
 | ADV-08          | Quote flooding and abandoned setups                             | Capped at the per-network swap limit; stalled setups expire |
 | ADV-09          | Reorg of the BTC lock                                           | Payment request hidden; the taker never aborts after paying |
+| ADV-10          | One Bitcoin source lags or lies about the tip or lock height    | Highest tip and one agreed lock height; redeem never inside the margin |
 | ADV-14          | Quote signed by another key                                     | Rejected                                                    |
 | ADV-10 … ADV-13 | See the [threat model](../security/threat-model.md) | Planned                                                     |
 

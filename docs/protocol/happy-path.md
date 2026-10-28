@@ -25,7 +25,7 @@ Bob locks BTC, Alice pays ZEC, Alice redeems, Bob sweeps (spec §4).
 
 ## 4.4 Alice claims the BTC
 
-* **R1 (margin rule).** Alice MUST NOT broadcast `tx_redeem` unless `current_height + redeem_margin < h_lock + t1`, where `h_lock` is `tx_lock`'s confirmation height. Inside the margin she cancels instead (see Failure paths).
+* **R1 (margin rule).** Alice MUST NOT broadcast `tx_redeem` unless `current_height + redeem_margin < h_lock + t1`, where `h_lock` is `tx_lock`'s confirmation height. `current_height` is the highest tip any Bitcoin source reports, and `h_lock` counts only once every source reports the same height, so a lagging source can't push a redeem into the margin (ADV-10). Inside the margin she cancels instead (see Failure paths).
 * **R2.** She verifies `esig_B`, decrypts it with `s_a` to get `sig_B(tx_redeem)`, adds her own signature, and broadcasts to at least two sources.
 * **R3.** If it isn't confirmed after 3 blocks, Alice MUST fee-bump it with CPFP from her redeem output.
 * **R4.** Done when `tx_redeem` has at least `n_conf_btc` confirmations.
