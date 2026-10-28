@@ -30,5 +30,6 @@ services:
       - -rpcallowip=0.0.0.0/0
       - -rpcuser=devnet
       - -rpcpassword=devnet
+      - -rpcservertimeout=120
     ports:
       - "127.0.0.1:18443:18443"
