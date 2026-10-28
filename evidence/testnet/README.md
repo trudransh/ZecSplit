@@ -39,3 +39,23 @@ Swap `d9c9794f` stopped after the maker locked BTC and before any ZEC was paid:
 | refund `1503cf53` | 328093 | final |
 
 Every other input is `4294967293` (no relative timelock).
+
+## The cryptography, checked against the chain
+
+`records/<swap>.json` is the public record of each finished testnet swap: the quote, both parties' commitments and reveals (share points on both curves, the cross-group DLEq proofs, the proofs of knowledge), Bob's adaptor signature on `tx_redeem`, and the `tx_redeem` txid. No share, key or passphrase.
+
+```bash
+just verify                    # or: cargo run --release -p zecsplitd --bin zecsplit-verify -- records/550dc7bd.json
+```
+
+For each record, `zecsplit-verify` fetches `tx_redeem` from mempool.space and checks:
+
+1. both reveals open their commitments;
+2. both cross-group DLEq proofs: each Zcash (Pallas) share point hides the same secret as its Bitcoin (secp256k1) twin;
+3. all six proofs of knowledge;
+4. `tx_redeem` pays Alice's committed payout address;
+5. Bob's signature in `tx_redeem`, combined with his adaptor signature, gives up `s_a`, and `s_a` opens Alice's committed Zcash share point. That is the step that lets Bob sweep the ZEC: the swap's atomicity, re-derived from public data.
+
+Change one byte in a record and it fails.
+
+These four swaps are public on purpose. A record contains the swap transcript, from which the lock address's viewing key follows, so it reveals that swap's ZEC amount and links its two Zcash transactions. Never publish a record for a swap you want private.
