@@ -502,3 +502,56 @@ fn fuzz_decode_never_panics() {
         );
     }
 }
+
+/// A finished swap's public record, as exported from Alice's sealed session.
+fn finished_record() -> (crate::verify::PublicRecord, Transaction, Transaction) {
+    let (mut alice, mut bob, _) = setup();
+    alice.on_encsig(&bob.encsig().unwrap()).unwrap();
+    let redeem = alice.signed_redeem().unwrap();
+    let cancel = bob.signed_cancel().unwrap();
+    let bundle = alice.save("http://maker").unwrap();
+    let record =
+        crate::verify::record_from_alice(&bundle, &redeem.compute_txid().to_string()).unwrap();
+    (record, redeem, cancel)
+}
+
+#[test]
+fn spec_4_5_r1_public_record_verifies_against_the_redeem() {
+    let (record, redeem, _) = finished_record();
+    let json = serde_json::to_string(&record).unwrap();
+    let back: crate::verify::PublicRecord = serde_json::from_str(&json).unwrap();
+    crate::verify::verify(&back, &redeem).unwrap();
+}
+
+#[test]
+fn spec_3_2_r3_public_record_with_a_broken_proof_fails() {
+    let (mut record, redeem, _) = finished_record();
+    record.bob_reveal.0.dleq[40] ^= 1;
+    assert!(matches!(
+        crate::verify::verify(&record, &redeem),
+        Err(crate::verify::VerifyError::Reveal("Bob", _))
+    ));
+}
+
+#[test]
+fn spec_4_5_r1_public_record_rejects_another_transaction() {
+    let (mut record, _, cancel) = finished_record();
+    assert!(crate::verify::verify(&record, &cancel).is_err());
+    record.redeem_txid = cancel.compute_txid().to_string();
+    assert!(matches!(
+        crate::verify::verify(&record, &cancel),
+        Err(crate::verify::VerifyError::Payout | crate::verify::VerifyError::Recover)
+    ));
+}
+
+#[test]
+fn public_record_holds_no_secret() {
+    let (mut alice, mut bob, _) = setup();
+    alice.on_encsig(&bob.encsig().unwrap()).unwrap();
+    let bundle = alice.save("http://maker").unwrap();
+    let json =
+        serde_json::to_string(&crate::verify::record_from_alice(&bundle, "00").unwrap()).unwrap();
+    let share = hex::encode(bundle.share.expose_secret());
+    let btc = hex::encode(bundle.btc_key.expose_secret());
+    assert!(!json.contains(&share) && !json.contains(&btc));
+}

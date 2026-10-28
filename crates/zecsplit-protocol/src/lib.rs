@@ -7,6 +7,7 @@ pub mod messages;
 pub mod recovery;
 pub mod session;
 pub mod timers;
+pub mod verify;
 
 #[cfg(test)]
 mod sim_tests;
