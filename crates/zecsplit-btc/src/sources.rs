@@ -62,14 +62,15 @@ pub enum Agreement {
     Disagree,
 }
 
-/// §4.2-R1: the lowest tip across all sources.
+/// §4.2-R1, §4.4-R1: the highest tip across all sources, so a lagging source can only make
+/// the redeem margin close early (ADV-10).
 pub async fn tip_on_all(sources: &[&dyn BtcSource]) -> Result<u32, SourceError> {
     if sources.len() < 2 {
         return Err(SourceError::TooFewSources);
     }
-    let mut tip = u32::MAX;
+    let mut tip = 0;
     for s in sources {
-        tip = tip.min(s.tip().await?);
+        tip = tip.max(s.tip().await?);
     }
     Ok(tip)
 }
@@ -127,7 +128,7 @@ pub struct SwapStatus {
     pub punish: Agreement,
 }
 
-/// §4.2-R1: the lowest tip and each swap transaction as every source sees it.
+/// §4.2-R1: the highest tip and each swap transaction as every source sees it.
 pub async fn swap_status(
     sources: &[&dyn BtcSource],
     txs: &SwapTxs,
@@ -172,8 +173,9 @@ pub async fn fetch_any(
     Ok(None)
 }
 
-/// Combines per-source views, always taking the weakest claim; only a confirmation one
-/// source has never heard of is a disagreement.
+/// Combines per-source views, always taking the weakest claim: confirmed only at one height
+/// every source reports (ADV-10); only a confirmation one source has never heard of is a
+/// disagreement.
 fn agree(views: &[Option<Option<u32>>]) -> Agreement {
     let confirmed = views.iter().filter(|v| matches!(v, Some(Some(_)))).count();
     if views.contains(&None) {
@@ -186,8 +188,12 @@ fn agree(views: &[Option<Option<u32>>]) -> Agreement {
     if confirmed < views.len() {
         return Agreement::Mempool;
     }
-    let height = views.iter().flatten().flatten().copied().max();
-    height.map_or(Agreement::Unseen, |height| Agreement::Confirmed { height })
+    let mut heights = views.iter().flatten().flatten().copied();
+    match heights.next() {
+        Some(height) if heights.all(|h| h == height) => Agreement::Confirmed { height },
+        Some(_) => Agreement::Mempool,
+        None => Agreement::Unseen,
+    }
 }
 
 /// bitcoind JSON-RPC; needs `-txindex` to see transactions outside its wallet.
@@ -522,10 +528,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tip_on_all_takes_the_lowest() {
-        let (a, mut b) = (fake(None, None), fake(None, None));
+    async fn adv_10_lagging_source_cannot_push_redeem_into_margin() {
+        let (mut a, mut b) = (fake(None, None), fake(None, None));
+        a.tip = 214;
         b.tip = 190;
-        assert_eq!(tip_on_all(&[&a, &b]).await.unwrap(), 190);
+        assert_eq!(tip_on_all(&[&a, &b]).await.unwrap(), 214);
+        assert_eq!(tip_on_all(&[&b, &a]).await.unwrap(), 214);
     }
 
     #[test]
@@ -535,8 +543,20 @@ mod tests {
         assert_eq!(agree(&[Some(None), Some(None)]), Agreement::Mempool);
         assert_eq!(agree(&[Some(Some(150)), Some(None)]), Agreement::Mempool);
         assert_eq!(
+            agree(&[Some(Some(150)), Some(Some(150))]),
+            Agreement::Confirmed { height: 150 }
+        );
+    }
+
+    #[test]
+    fn adv_10_sources_must_agree_on_the_lock_height() {
+        assert_eq!(
             agree(&[Some(Some(150)), Some(Some(151))]),
-            Agreement::Confirmed { height: 151 }
+            Agreement::Mempool
+        );
+        assert_eq!(
+            agree(&[Some(Some(151)), Some(Some(150))]),
+            Agreement::Mempool
         );
     }
 }
