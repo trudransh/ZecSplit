@@ -166,7 +166,7 @@ fn digests(txs: &SwapTxs) -> Result<Digests, SessionError> {
 }
 
 /// §4.5-R1, §5.3-R3: recovers the peer's share from the signature `signer` published in `tx`.
-fn recover_share(
+pub(crate) fn recover_share(
     tx: &Transaction,
     signer: &PublicKey,
     other: &PublicKey,
