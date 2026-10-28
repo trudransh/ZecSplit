@@ -24,7 +24,7 @@
 1. **Proof on public chains.** Four swaps and one timelock refund on Zcash testnet + Bitcoin signet, every transaction linked in [Live on testnet](#live-on-testnet). The fourth swap ran through the hosted web UI.
 2. **The UI.** [zecsplit.vercel.app](https://zecsplit.vercel.app). The page is only a screen: a real swap needs the engine running on your own computer, because that is where the keys live. *Try the demo* is a simulation with no chain behind it.
 3. **Run a real swap yourself, no coins needed.** With Docker and Rust, `just judge` starts a private regtest world on your machine (Zebra, bitcoind, a maker and your engine) and prints a link that opens the hosted UI against it. See [Judge kit](#judge-kit).
-4. **Privacy, checked on real chains.** Every Zcash transaction a swap makes has 0 transparent parts, 0 Sapling parts and exactly 2 Ironwood actions; no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
+4. **Privacy, checked on real chains.** Every Zcash transaction in a swap is Ironwood only: 0 transparent, 0 Sapling, 0 Orchard parts. The raw testnet transactions and a one-line check are in [`evidence/testnet`](evidence/testnet); no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
 
 The name means a *split key*: the ZEC sits under a spend key split between the two parties. Nothing to do with splitting bills.
 
@@ -128,7 +128,7 @@ The operator runbook is in [`ops/testnet`](ops/testnet); it expects your own mak
 - **Model check.** Both state machines are driven through 20,000 random runs each, with reorgs, disagreeing Bitcoin sources, block jumps and hostile peer messages. After every step it checks the rules that keep funds safe: no payment request before a confirmed lock, no redeem inside the safety margin, no cancel against your own redeem, no sweep without the other side's secret, no abort after paying or locking. It found a real bug (a reorg could abort a taker who had already paid), now fixed. A review found a second one: a lagging Bitcoin source could push a redeem into the safety margin. Fixed: the taker now uses the highest tip any source reports and one lock height every source agrees on (ADV-10).
 - **Fuzzing.** Mutated setup signatures, adaptor signatures, lock templates and reveals are all rejected, before and after the real one, and never leave a session unusable. The wire and recovery-file decoders take 60,000 random inputs without a panic.
 - **Adversarial tests** for a fake BTC lock, a maker checking ZEC on someone else's node, wrong ZEC amounts, a signature arriving inside the safety margin, a blocked refund (the taker punishes) and quote flooding.
-- **Privacy tests on real chains.** Every Zcash transaction has zero transparent and zero Sapling parts and exactly 2 Ironwood actions; no secret appears in any file the engine or maker writes; nothing asks a light server for a transaction by id.
+- **Privacy tests on real chains.** Every Zcash transaction has zero transparent, Sapling and Orchard parts, only Ironwood actions (the maker's sweep always has exactly 2); no secret appears in any file the engine or maker writes; nothing asks a light server for a transaction by id.
 
 ## Architecture
 
