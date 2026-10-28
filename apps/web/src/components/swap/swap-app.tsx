@@ -368,7 +368,8 @@ export function SwapApp() {
             <h3>Read this once.</h3>
             <ul className="risks">
               <li>
-                This swap takes <strong>about 45 to 90 minutes</strong>.
+                This swap takes{" "}
+                <strong>{health?.network === "regtest" ? "a few minutes on this local test chain" : "about 45 to 90 minutes"}</strong>.
               </li>
               <li>
                 If the maker disappears, your ZEC comes back automatically, but the engine must be running at some
@@ -486,7 +487,7 @@ export function SwapApp() {
           <ul className="side-list">
             <li>Your ZEC never touches a transparent address.</li>
             <li>On Zcash, the swap is two ordinary shielded transactions.</li>
-            <li>The maker never holds your coins: every deadline is a Bitcoin script.</li>
+            <li>The maker never holds your coins: every deadline is a Bitcoin timelock.</li>
           </ul>
         </div>
         {health && (
