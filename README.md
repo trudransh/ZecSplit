@@ -5,7 +5,7 @@
 <h1 align="center">ZecSplit</h1>
 
 <p align="center">
-  <b>Swap shielded ZEC for BTC with nobody in the middle who can freeze, steal or watch.</b>
+  <b>Swap shielded ZEC for BTC with nobody in the middle who can freeze or steal it.</b>
 </p>
 
 <p align="center">
@@ -13,11 +13,20 @@
   <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License">
   <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
   <img src="https://img.shields.io/badge/networks-regtest%20%7C%20testnet-lightgrey" alt="Networks">
-  <a href="https://zecsplit.gitbook.io/zecsplit-docs/"><img src="https://img.shields.io/badge/docs-gitbook-blue" alt="Docs"></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-read-blue" alt="Docs"></a>
 </p>
 
 > [!WARNING]
 > **Pre-alpha. Regtest and testnet only. Unaudited.** Do not use with real funds.
+
+## For judges
+
+1. **Proof on public chains.** Four swaps and one timelock refund on Zcash testnet + Bitcoin signet, every transaction linked in [Live on testnet](#live-on-testnet). The fourth swap ran through the hosted web UI.
+2. **The UI.** [zecsplit.vercel.app](https://zecsplit.vercel.app). The page is only a screen: a real swap needs the engine running on your own computer, because that is where the keys live. *Try the demo* is a simulation with no chain behind it.
+3. **Run a real swap yourself, no coins needed.** With Docker and Rust, `just judge` starts a private regtest world on your machine (Zebra, bitcoind, a maker and your engine) and prints a link that opens the hosted UI against it. See [Judge kit](#judge-kit).
+4. **Privacy, checked on real chains.** Every Zcash transaction a swap makes has 0 transparent parts, 0 Sapling parts and exactly 2 Ironwood actions; no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
+
+The name means a *split key*: the ZEC sits under a spend key split between the two parties. Nothing to do with splitting bills.
 
 ## What it is
 
@@ -98,8 +107,21 @@ Shielded testnet ZEC swapped for signet BTC, the maker on a cloud VM checking th
 | 1 | [`dbc65938…`](https://mempool.space/signet/tx/dbc6593847db04dec256aca4dae00c8b5df6a478731d981291be2c7b7937cda1) | [`62cfea06…`](https://testnet.zcashexplorer.app/transactions/62cfea0652d9ec5675db266bcc28f6bac7e63b0ba0f2443b5a1cf03e1e88805c) | [`8968f8f0…`](https://mempool.space/signet/tx/8968f8f08afe3f0bce599b47115f28f42bd0d67ea04f1a92df9137fa525be35d) | [`22451c4e…`](https://testnet.zcashexplorer.app/transactions/22451c4e6e6c8e720ddfec7cc45756b76ed3e9cc95628773c08c3685e94a25e7) |
 | 2 | [`224e049f…`](https://mempool.space/signet/tx/224e049f3ba6f7945304e0ed684f8009ccfb1159bf557bb4c7d51873e17af774) | [`2139bd7a…`](https://testnet.zcashexplorer.app/transactions/2139bd7a3a0cb4b24438bca3cf3464d6e83d5eea384fbcd1901114e5f0a8824d) | [`f1569274…`](https://mempool.space/signet/tx/f15692748402e1730c8d36fee1ff3d212057027ac40668381a249f640d2205bd) | [`9125fcb0…`](https://testnet.zcashexplorer.app/transactions/9125fcb06fa15dce4301c17bbbe3b451de0a1769c710d8b1cbaec1f8bfe6a8fc) |
 | 3 | [`27024c5d…`](https://mempool.space/signet/tx/27024c5da837cb9ed1dc4eeda2c2f128d4692418e9dea07000f0bdee7af48f9a) | [`abdb747f…`](https://testnet.zcashexplorer.app/transactions/abdb747f0f471fd6a9844940c2db95ef43e68c5362a8a99912ed19f57e189aa6) | [`dce3fce1…`](https://mempool.space/signet/tx/dce3fce1aa550cab3b3e7e2b190b1a2b4388f51104471d375252fcfaf29b3d35) | [`85af11f5…`](https://testnet.zcashexplorer.app/transactions/85af11f506ee0fbf558b2f9d612f7bef1d05d68d027186bb8c02208d528a2c30) |
+| 4 (web UI) | [`7e91162a…`](https://mempool.space/signet/tx/7e91162ab130a637f22cde5be9c86517f9b475d6be5473fa6892415ced5cfc8a) | [`e3585ecb…`](https://testnet.zcashexplorer.app/transactions/e3585ecb7f233cb4f3ef4a1d89fec486768330e66beaddb4d4427a91a437ca46) | [`e54c639f…`](https://mempool.space/signet/tx/e54c639f355efa075fa80319b465789fb2528c7ef383393822356a534f052f2b) | [`2e264fe9…`](https://testnet.zcashexplorer.app/transactions/2e264fe99a1864169301fc8dad0e950ac8550cc2f5630f01b8d08f09154168b7) |
 
-Run your own with [`ops/testnet/swap.sh`](ops/testnet/swap.sh) against a maker you host ([`ops/testnet`](ops/testnet)).
+**A refund on a public chain.** Swap `d9c9794f` stopped after the maker locked BTC and before any ZEC was paid. Nobody cooperated; the timelocks finished it:
+
+| Maker locks BTC | Cancel, valid only from `t1` = 36 blocks after the lock | Maker's refund |
+|---|---|---|
+| [`d1dcc58c…`](https://mempool.space/signet/tx/d1dcc58c246451446b20f6a305f4e2697cbd0ad605d9e8a3ddfceb59fab3e5a8) at block 328056 | [`efed9957…`](https://mempool.space/signet/tx/efed99572f863eb1782088da7a8e1b2ebe17b0f3265fd970325a04f8dd28659a) at block 328092 | [`1503cf53…`](https://mempool.space/signet/tx/1503cf53e194fd1affae7f481f3f7b08057315daae8b84652dc96c2ae5a5ceab) at block 328093 |
+
+How these ran, and what it means for trust:
+
+- The maker ran on a cloud VM and checked the ZEC lock on its own Zebra node. The taker's engine ran on a laptop.
+- The taker's two Bitcoin sources were the maker's bitcoind and the public mempool.space signet API. Both must agree before the taker acts, so a lying maker node can only stall a swap, never make the taker pay early.
+- The taker's Zcash light server was the maker's. The taker only uses it on the refund path, so in a refund the maker would see the taker's sweep. A taker-owned light server replaces it after the hackathon.
+
+The operator runbook is in [`ops/testnet`](ops/testnet); it expects your own maker VM and wallets. For a testnet session against our maker, open an issue.
 
 ## How it has been attacked
 
@@ -138,6 +160,15 @@ flowchart BT
 
 Needs Rust 1.93, Docker and [`just`](https://github.com/casey/just).
 
+Run a swap yourself in the hosted UI, against a private regtest world on your machine:
+
+```bash
+just judge          # devnet + maker + your engine, mines blocks, prints the UI link and a BTC address
+just judge-pay '<zcash: link under the QR>'   # pays the QR from the devnet wallet
+```
+
+Or the scripted run, no browser:
+
 ```bash
 just devnet-up      # Zebra regtest (NU7) + bitcoind + a funded shielded wallet
 just demo           # 3 swaps between real engine and maker processes, privacy checks, then a refund; prints every txid
@@ -155,16 +186,16 @@ just devnet-test    # every scenario on regtest through the real engine and make
 
 ## Docs
 
-Full documentation: **[zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/)**
+Full documentation: **[docs/](docs/README.md)** in this repo, also at [zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/).
 
 | Start here | |
 |---|---|
-| [Core concepts](https://zecsplit.gitbook.io/zecsplit-docs/core-concepts) | The idea in ten minutes |
-| [Protocol](https://zecsplit.gitbook.io/zecsplit-docs/protocol) | The spec, rule by rule |
-| [Threat model](https://zecsplit.gitbook.io/zecsplit-docs/security/threat-model) | 25 threats, their mitigations and tests |
-| [Privacy](https://zecsplit.gitbook.io/zecsplit-docs/security/privacy) | What each observer learns |
-| [Paper](https://zecsplit.gitbook.io/zecsplit-docs/resources/paper) | The protocol in paper form |
+| [Core concepts](docs/core-concepts.md) | The idea in ten minutes |
+| [Protocol](docs/protocol.md) | The spec, rule by rule |
+| [Threat model](docs/security/threat-model.md) | 25 threats, their mitigations and tests |
+| [Privacy](docs/security/privacy.md) | What each observer learns |
+| [Paper](docs/resources/paper.md) | The protocol in paper form |
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. Third-party work and notices: [CREDITS.md](CREDITS.md).
