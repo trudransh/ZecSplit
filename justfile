@@ -37,5 +37,13 @@ demo:
     echo "Refund path: maker locks, taker pays, nobody redeems, cancel then refund..."
     cargo test -q -p zecsplit-protocol --test devnet_swap t_024_cancel_then_refund -- --nocapture 2>&1 | grep -E "^refund path|test result|panicked"
 
+# Judge kit: private regtest world + maker + engine, driven from the hosted UI; Ctrl-C stops it.
+judge:
+    devnet/judge.sh
+
+# Pays a QR's zcash: link from the devnet wallet (run while `just judge` is up).
+judge-pay uri:
+    devnet/judge.sh pay '{{uri}}'
+
 devnet-down:
     docker compose -f devnet/docker-compose.yml down
