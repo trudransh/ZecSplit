@@ -1,8 +1,5 @@
-// The hero art: the real Zcash and Bitcoin logos rasterised into monospace glyphs, spinning,
-// with ciphertext flowing from the ZEC coin to the BTC coin over a dot-matrix field.
-// Cell grid, supersampled coverage and the wake field follow stackedlol/ascii-sharks.
 
-// Simple Icons (CC0), 24×24 viewBox: a disc with the Z / ₿ cut out of it.
+/** Simple Icons (CC0), 24×24 viewBox: a disc with the Z / ₿ cut out of it. */
 export const ZEC_PATH =
   "M12 0A12 12 0 0 0 0 12a12.013 12.013 0 0 0 12 12 12 12 0 1 0 0-24zm-1.008 4.418h2.014v2.014l3.275-.002v1.826l-5.08 6.889h5.08v2.423h-3.275v2.006h-2.012v-2.006H7.72v-1.826l5.074-6.888H7.719V6.432h3.273z";
 export const BTC_PATH =
@@ -102,7 +99,6 @@ export class AsciiCoins {
     window.addEventListener("pointermove", this.onMove, { passive: true });
     window.addEventListener("pointerdown", this.onDown, { passive: true });
     this.resize();
-    // Canvas text doesn't trigger a webfont load, so redraw once the mono face arrives.
     document.fonts?.load(`500 14px ${this.font}`).then(() => !this.disposed && this.draw(0));
     this.schedule();
   }
@@ -258,7 +254,6 @@ export class AsciiCoins {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
-    // Dot matrix: every other cell, brighter where the wake passes.
     const dot = Math.max(1.5, cw * 0.18);
     for (let r = 0; r < rows; r += 1) {
       for (let c = (r & 1); c < cols; c += 2) {
@@ -295,8 +290,6 @@ export class AsciiCoins {
     const bh = r1 - r0 + 1;
     if (bw < 2 || bh < 2) return;
 
-    // Blue = the coin's edge as it turns, green = the whole disc, red = the logo face.
-    // Disc without face is the letter, so Z and ₿ get their own colour like the real marks.
     sprite.width = bw * SAMPLES;
     sprite.height = bh * SAMPLES;
     sg.setTransform(SAMPLES / cw, 0, 0, SAMPLES / ch, -c0 * SAMPLES, -r0 * SAMPLES);
@@ -359,7 +352,6 @@ export class AsciiCoins {
           ctx.fillText(glyph, px + cw / 2, py + ch / 2 + 1);
           continue;
         }
-        // Lit from the top left, with a highlight that sweeps across as the coin turns.
         const nx = (px + cw / 2 - x) / (r * k);
         const ny = (py + ch / 2 - y) / r;
         const lit = clamp(0.6 - nx * 0.2 - ny * 0.25 + Math.exp(-((nx - sweep) ** 2) * 6) * 0.3 + (key - 0.5) * 0.08, 0, 1);

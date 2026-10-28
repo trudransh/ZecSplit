@@ -8,7 +8,7 @@ export function Logo({ size = 26 }: { size?: number }) {
   );
 }
 
-// Simple Icons (CC0) marks for the "built on" strip.
+/** Simple Icons (CC0) marks for the "built on" strip. */
 export function ZcashMark() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
