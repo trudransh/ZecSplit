@@ -3,6 +3,7 @@
 A copy of [zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/), kept in the repo so it outlives the hosted site.
 
 - [Welcome](welcome.md)
+- [Judge guide](judges.md)
 - [Quickstart](quickstart.md)
 - [Core concepts](core-concepts.md)
 - [Protocol](protocol.md)
