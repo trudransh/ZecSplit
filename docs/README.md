@@ -1,0 +1,28 @@
+# ZecSplit docs
+
+A copy of [zecsplit.gitbook.io/zecsplit-docs](https://zecsplit.gitbook.io/zecsplit-docs/), kept in the repo so it outlives the hosted site.
+
+- [Welcome](welcome.md)
+- [Quickstart](quickstart.md)
+- [Core concepts](core-concepts.md)
+- [Protocol](protocol.md)
+  - [Notation and quote](protocol/notation-and-quote.md)
+  - [Key setup](protocol/key-setup.md)
+  - [Bitcoin transactions](protocol/bitcoin-transactions.md)
+  - [Happy path](protocol/happy-path.md)
+  - [Failure paths and timelocks](protocol/failure-paths-and-timelocks.md)
+  - [State machines and recovery](protocol/state-machines-and-recovery.md)
+  - [Wire messages](protocol/wire-messages.md)
+  - [Network constants](protocol/network-constants.md)
+- [Security](security.md)
+  - [Threat model](security/threat-model.md)
+  - [Privacy](security/privacy.md)
+- [Developers](developers.md)
+  - [Engine API](developers/engine-api.md)
+  - [Running a maker](developers/running-a-maker.md)
+  - [Testing](developers/testing.md)
+- [Resources](resources.md)
+  - [Paper](resources/paper.md)
+  - [Key decisions](resources/key-decisions.md)
+  - [Glossary](resources/glossary.md)
+  - [FAQ](resources/faq.md)
