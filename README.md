@@ -35,7 +35,7 @@
 4. **Run a full swap in the web app, no coins needed** (Docker and Rust): `just judge` starts a private regtest world on your machine and opens [the app](https://zecsplit.vercel.app) against it. About 2 minutes per swap.
 5. **Real and simulated, in one line:** the four swaps and the refund ran on Zcash testnet and Bitcoin signet with real keys, proofs and signatures; the app's *Try the demo* button is a simulation with no chain behind it ([the full list](#what-is-real-and-what-is-simulated)).
 6. **Step by step:** [the judge guide](docs/judges.md) covers all three paths (no install, Rust only, full local swap) with expected output and fixes.
-7. **Read on:** [the live run on the explorers](#the-live-run-on-the-explorers), [the raw evidence](evidence/testnet), [the protocol](docs/protocol.md), [the threat model](docs/security/threat-model.md), [the limits](#limits).
+7. **Read on:** [the live run on the explorers](#the-live-run-on-the-explorers), [the raw evidence](evidence/testnet), [the protocol](docs/protocol.md), [the threat model](docs/security/threat-model.md), [the limits](#limits), [the roadmap](#roadmap).
 
 The name means a *split key*: the ZEC sits under a spend key split between the two parties.
 
@@ -189,6 +189,20 @@ just devnet-up && just demo                    # scripted: 3 swaps, privacy chec
 ```
 
 The first build of the Zcash crates takes several minutes. Development: `just setup` (git hooks), `just check` (what CI runs), `just devnet-test` (every scenario on regtest).
+
+## Roadmap
+
+v1 is the hard part: a two-party key on shielded Zcash, enforced by Bitcoin, live on testnet. What comes next:
+
+| Version | What |
+|---|---|
+| **v1** (now) | Shielded ZEC → BTC. Local engine and web app, one maker, Zcash testnet and Bitcoin signet. Public verification of finished swaps (`zecsplit-verify`). |
+| **v1.1** | The other direction, BTC → shielded ZEC, with a claim link so a Bitcoiner needs no Zcash wallet first. A watchtower holds the user's pre-signed refund, so closing the app mid-swap is safe. |
+| **v1.2** | Desktop app (Tauri), then mobile. The maker reached over Tor by default, and a taker-owned light server. Paying the QR tested with consumer wallets (Zodl, Zkool) on testnet. |
+| **Mainnet beta** | After an external review: a capped per-swap amount, confirmation depth counted on the lowest tip of the two sources, and reproducible release builds. |
+| **v2** | Many makers: anyone runs `zecsplit-maker`, quotes are signed by each maker's key, and a quote board only relays them. An Ethereum leg (USDC) through a small point-lock contract, with the same Zcash core. Verifying chains without trusting a server (FlyClient, PIR). |
+
+The marketplace pieces already have their seams in the code: the protocol crate knows nothing about transport, quotes are signed, the maker is a standalone service with a versioned wire protocol, and the engine API is the only contract a UI sees.
 
 ## Limits
 
