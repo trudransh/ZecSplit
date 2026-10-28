@@ -88,7 +88,7 @@ Measured on swap `550dc7bd…` (Zcash testnet + Bitcoin signet, 26 Oct 2026): ma
 | Adversarial tests passing                                          | 10 / 14                  |
 | Scenario tests on regtest through the real engine and maker        | S-01 to S-07             |
 
-Transactions: lock [`dbc65938…`](https://mempool.space/signet/tx/dbc6593847db04dec256aca4dae00c8b5df6a478731d981291be2c7b7937cda1), ZEC payment [`62cfea06…`](https://testnet.zcashexplorer.app/transactions/62cfea0652d9ec5675db266bcc28f6bac7e63b0ba0f2443b5a1cf03e1e88805c), redeem [`8968f8f0…`](https://mempool.space/signet/tx/8968f8f08afe3f0bce599b47115f28f42bd0d67ea04f1a92df9137fa525be35d), sweep [`22451c4e…`](https://testnet.zcashexplorer.app/transactions/22451c4e6e6c8e720ddfec7cc45756b76ed3e9cc95628773c08c3685e94a25e7).
+Transactions: lock [`dbc65938…`](https://mempool.space/signet/tx/dbc6593847db04dec256aca4dae00c8b5df6a478731d981291be2c7b7937cda1), ZEC payment [`62cfea06…`](https://testnet.zecblock.com/tx/62cfea0652d9ec5675db266bcc28f6bac7e63b0ba0f2443b5a1cf03e1e88805c), redeem [`8968f8f0…`](https://mempool.space/signet/tx/8968f8f08afe3f0bce599b47115f28f42bd0d67ea04f1a92df9137fa525be35d), sweep [`22451c4e…`](https://testnet.zecblock.com/tx/22451c4e6e6c8e720ddfec7cc45756b76ed3e9cc95628773c08c3685e94a25e7).
 
 ## 8. Related work
 
