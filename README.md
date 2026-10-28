@@ -24,7 +24,8 @@
 1. **Proof on public chains.** Four swaps and one timelock refund on Zcash testnet + Bitcoin signet, every transaction linked in [Live on testnet](#live-on-testnet). The fourth swap ran through the hosted web UI.
 2. **The UI.** [zecsplit.vercel.app](https://zecsplit.vercel.app). The page is only a screen: a real swap needs the engine running on your own computer, because that is where the keys live. *Try the demo* is a simulation with no chain behind it.
 3. **Run a real swap yourself, no coins needed.** With Docker and Rust, `just judge` starts a private regtest world on your machine (Zebra, bitcoind, a maker and your engine) and prints a link that opens the hosted UI against it. See [Judge kit](#judge-kit).
-4. **Privacy, checked on real chains.** Every Zcash transaction in a swap is Ironwood only: 0 transparent, 0 Sapling, 0 Orchard parts. The raw testnet transactions and a one-line check are in [`evidence/testnet`](evidence/testnet); no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
+4. **The cryptography, checked against the chain.** `just verify` (Rust only, no Docker) takes the public record of each testnet swap, checks both cross-group DLEq proofs and all six proofs of knowledge, fetches `tx_redeem` from mempool.space and recovers the taker's key share from it, the step that lets the maker sweep the ZEC. See [`evidence/testnet`](evidence/testnet).
+5. **Privacy, checked on real chains.** Every Zcash transaction in a swap is Ironwood only: 0 transparent, 0 Sapling, 0 Orchard parts. The raw testnet transactions and a one-line check are in [`evidence/testnet`](evidence/testnet); no secret appears in any file or log the engine or maker writes. `just demo` runs these checks.
 
 The name means a *split key*: the ZEC sits under a spend key split between the two parties. Nothing to do with splitting bills.
 

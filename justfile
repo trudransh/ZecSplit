@@ -45,5 +45,10 @@ judge:
 judge-pay uri:
     devnet/judge.sh pay '{{uri}}'
 
+# Checks every testnet swap record against Bitcoin signet (mempool.space): proofs and the recovered share.
+verify:
+    cargo build -q --release -p zecsplitd --bin zecsplit-verify
+    for f in evidence/testnet/records/*.json; do target/release/zecsplit-verify "$f" || exit 1; done
+
 devnet-down:
     docker compose -f devnet/docker-compose.yml down
