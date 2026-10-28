@@ -27,8 +27,11 @@ const OBSERVERS = [
   },
   {
     name: "A network observer",
-    learns: ["That you're talking to a maker"],
-    never: ["What you're saying: every message is encrypted in transit"],
+    learns: [
+      "That you're talking to a maker",
+      "Over plain HTTP, the swap messages too: reach the maker over HTTPS or a tunnel (Tor support is planned)",
+    ],
+    never: ["Anything that lets them take your coins"],
   },
 ];
 

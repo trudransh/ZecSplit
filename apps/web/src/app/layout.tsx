@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ZecSplit · Swap shielded ZEC for BTC",
   description:
-    "Trustless atomic swaps from shielded ZEC to BTC. No bridge, no custodian, no transparent address. Nobody in the middle can freeze, take or watch your swap.",
+    "Trustless atomic swaps from shielded ZEC to BTC. No bridge, no custodian, no transparent address. Nobody in the middle can freeze or take your swap.",
   icons: { icon: "/favicon.svg" },
 };
 

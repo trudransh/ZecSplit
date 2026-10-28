@@ -166,7 +166,7 @@ function Pay({ engine, view }: { engine: Engine; view: SwapView }) {
           {coin(view.zec_amount)} <small>ZEC</small>
         </h3>
         <p>
-          Scan with a shielded wallet such as Zodl, Zkool or Vizor, or paste the address below. Send exactly this
+          Scan with a shielded Zcash wallet that reads ZIP 321 payment requests, or paste the address below. Send exactly this
           amount.
           {deadline && (
             <>

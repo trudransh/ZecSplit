@@ -47,7 +47,7 @@ const STEPS = [
   ["Get a quote", "Enter how much ZEC to swap. The maker signs a quote that's valid for 60 seconds."],
   ["Save your recovery file", "Encrypted with your passphrase. With it, you can finish the swap from any device."],
   ["The maker locks BTC first", "You pay nothing until the maker's BTC is locked and confirmed on Bitcoin."],
-  ["Pay one QR code", "From the Zcash wallet you already use: Zodl, Zkool or Vizor. The payment stays shielded."],
+  ["Pay one QR code", "A standard ZIP 321 payment request, paid from your own shielded wallet. The payment stays shielded."],
   ["Claim your BTC", "The app claims it to your own Bitcoin address. Then the maker sweeps the ZEC."],
 ];
 
@@ -105,7 +105,7 @@ export default function Home() {
             </h1>
             <p className="lede">
               A trustless atomic swap from shielded ZEC to BTC. No bridge, no custodian and no transparent address,
-              so nobody in the middle can freeze it, take it or watch it.
+              so nobody in the middle can freeze it or take it.
             </p>
             <div className="actions">
               <Link href="/swap" className="btn btn-dark">
@@ -215,7 +215,7 @@ export default function Home() {
                   <span className="mute">Bitcoin&apos;s clock brings your coins home.</span>
                 </h2>
                 <p className="lede">
-                  Every deadline lives in one Bitcoin script. Nobody has to cooperate for your money to come back.
+                  Every deadline is a Bitcoin timelock on transactions both sides signed before any coin moved. Nobody has to cooperate for your money to come back.
                   The app only has to run at some point inside the refund window.
                 </p>
                 <a href={DOCS} target="_blank" rel="noreferrer" className="btn btn-cyan">
