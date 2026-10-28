@@ -9,19 +9,19 @@
 > A trustless atomic swap between the Zcash Ironwood pool and Bitcoin: no bridge, no custodian, no wrapped coin, no transparent Zcash address.
 > Only Bitcoin's timelocks and Zcash's consensus decide who ends up with what.
 
-[![CI](https://github.com/trudransh/Splitzec/actions/workflows/ci.yml/badge.svg)](https://github.com/trudransh/Splitzec/actions/workflows/ci.yml)
+[![CI](https://github.com/trudransh/ZecSplit/actions/workflows/ci.yml/badge.svg)](https://github.com/trudransh/ZecSplit/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 ![Networks](https://img.shields.io/badge/networks-regtest%20%7C%20testnet-lightgrey)
 
-[The app](https://zecsplit.vercel.app) · [the video](VIDEO_URL) · [the docs](docs/README.md) · [the evidence](evidence/testnet) · [run it yourself](#run-it-yourself)
+[The app](https://zecsplit.vercel.app) · [the video](https://www.youtube.com/watch?v=lAWoqCJCH1A) · [the docs](docs/README.md) · [the evidence](evidence/testnet) · [run it yourself](#run-it-yourself)
 
 > [!WARNING]
 > **Pre-alpha. Regtest and testnet only. Unaudited.** Do not use with real funds.
 
 ## For judges (5 minutes)
 
-1. **Watch** [the video](VIDEO_URL): a swap in the web app, then the proof on public explorers.
+1. **Watch** [the video](https://www.youtube.com/watch?v=lAWoqCJCH1A): a swap in the web app, then the proof on public explorers.
 2. **Check a timelock on a public chain, nothing to install** (`curl` and `jq`). Swap `d9c9794f` was abandoned after the maker locked BTC; its cancel could only be mined 36 blocks after the lock, and was:
 
    ```bash

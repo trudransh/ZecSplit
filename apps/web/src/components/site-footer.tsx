@@ -1,6 +1,6 @@
 import { Pond } from "./pond";
 
-const REPO = "https://github.com/Raveesh1007/Splitzec";
+const REPO = "https://github.com/trudransh/ZecSplit";
 const DOCS = "https://zecsplit.gitbook.io/zecsplit-docs";
 
 /** The koi pond with a link bar, shared by every page. */

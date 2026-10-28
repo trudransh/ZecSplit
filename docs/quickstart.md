@@ -13,8 +13,8 @@ The devnet runs a Zebra regtest node with NU7 active, a light-wallet endpoint, a
 ## Swap in the web UI
 
 ```bash
-git clone https://github.com/trudransh/Splitzec
-cd Splitzec
+git clone https://github.com/trudransh/ZecSplit
+cd ZecSplit
 just judge          # devnet + a maker + your engine, mines blocks, prints the UI link and a BTC address
 ```
 
@@ -29,8 +29,8 @@ Blocks are mined every 10 s (ZEC) and 30 s (BTC); pay within about 7 minutes of 
 ## Scripted run
 
 ```bash
-git clone https://github.com/trudransh/Splitzec
-cd Splitzec
+git clone https://github.com/trudransh/ZecSplit
+cd ZecSplit
 just devnet-up      # Zebra regtest + bitcoind + a funded shielded wallet
 just demo           # 3 swaps between real engine and maker processes, privacy checks, then a refund
 ```

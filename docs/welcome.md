@@ -7,7 +7,7 @@ ZecSplit is a trustless atomic swap between **shielded ZEC** (the Zcash Ironwood
 > [!WARNING]
 > **Pre-alpha. Regtest and testnet only. Unaudited.** Do not use ZecSplit with real funds.
 
-Code: [github.com/trudransh/Splitzec](https://github.com/trudransh/Splitzec) · App: [zecsplit.vercel.app](https://zecsplit.vercel.app)
+Code: [github.com/trudransh/ZecSplit](https://github.com/trudransh/ZecSplit) · App: [zecsplit.vercel.app](https://zecsplit.vercel.app)
 
 ## The problem
 
